@@ -45,10 +45,15 @@ public final class PushListener: @unchecked Sendable {
         let client = accept(fd, nil, nil)
         guard client >= 0 else { return }
         defer { close(client) }
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        let n = read(client, &buffer, buffer.count)
-        guard n > 0 else { return }
-        let payload = String(decoding: buffer[0..<n], as: UTF8.self)
+        var accumulated = [UInt8]()
+        var chunk = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let n = read(client, &chunk, chunk.count)
+            if n <= 0 { break }
+            accumulated.append(contentsOf: chunk[0..<n])
+        }
+        guard !accumulated.isEmpty else { return }
+        let payload = String(decoding: accumulated, as: UTF8.self)
         if let event = try? PushListener.decode(payload) { onEvent(event) }
     }
 
