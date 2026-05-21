@@ -41,8 +41,8 @@ public struct FixRunner: Sendable {
     public func run(context: FixContext, clonePath: String) throws -> FixResult {
         let prompt = buildPrompt(context)
         let r = try runner.run("claude",
-            ["-p", prompt, "--permission-mode", "acceptEdits", "--dangerously-skip-permissions"],
-            cwd: clonePath, stdin: nil, env: nil)
+            ["-p", "--permission-mode", "acceptEdits", "--dangerously-skip-permissions"],
+            cwd: clonePath, stdin: prompt, env: nil)
         guard r.exitCode == 0 else { throw AppError.commandFailed("claude", r.exitCode) }
         let diff = try git.diff(cwd: clonePath)
         guard !diff.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AppError.noChanges }

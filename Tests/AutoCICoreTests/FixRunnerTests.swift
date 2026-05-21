@@ -26,6 +26,11 @@ final class FixRunnerTests: XCTestCase {
         let result = try runner.run(context: ctx, clonePath: "/clone")
         XCTAssertTrue(result.madeChanges)
         XCTAssertEqual(result.summary, "fixed it")
+        // Prompt must be delivered via stdin, not as a CLI argument.
+        let claudeCall = fake.calls.first { $0.command == "claude" }
+        XCTAssertNotNil(claudeCall?.stdin, "prompt must be passed via stdin")
+        XCTAssertFalse(claudeCall?.args.contains(where: { $0.contains("CI job") }) ?? false,
+                       "prompt must NOT appear in args")
     }
 
     func testRunThrowsNoChangesWhenDiffEmpty() {
