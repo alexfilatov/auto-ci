@@ -16,8 +16,8 @@ final class DaemonTests: XCTestCase {
         let engine = StubFixEngine(
             onAttempt: { attempts += 1 },
             signatureProvider: { _ in sig },           // identical every time
-            fixOutcome: { .pushedToBranch("feature-x") },
-            rerunResult: { [WorkflowRun(id: 1, name: "CI", status: .failed, headSha: "abc")] }
+            fixOutcome: { FixAttempt(outcome: .pushedToBranch("feature-x"), fixSHA: "fixsha") },
+            rerunResult: { _ in [WorkflowRun(id: 1, name: "CI", status: .failed, headSha: "abc")] }
         )
         let daemon = Daemon(maxAttempts: 3, notifier: notifier, engine: engine)
         let result = daemon.handleFailedRun(project: "demo", branch: "feature-x", sha: "abc",
@@ -33,8 +33,8 @@ final class DaemonTests: XCTestCase {
         let engine = StubFixEngine(
             onAttempt: {},
             signatureProvider: { _ in sigs.removeFirst() },
-            fixOutcome: { .pushedToBranch("feature-x") },
-            rerunResult: { [] } // green
+            fixOutcome: { FixAttempt(outcome: .pushedToBranch("feature-x"), fixSHA: "fixsha") },
+            rerunResult: { _ in [] } // green
         )
         let daemon = Daemon(maxAttempts: 3, notifier: notifier, engine: engine)
         let result = daemon.handleFailedRun(project: "demo", branch: "feature-x", sha: "abc",
@@ -49,13 +49,28 @@ final class DaemonTests: XCTestCase {
         let engine = StubFixEngine(
             onAttempt: {},
             signatureProvider: { _ in counter += 1; return FailureSignature(job: "t", step: "s", hash: "h\(counter)") },
-            fixOutcome: { .pushedToBranch("feature-x") },
-            rerunResult: { [WorkflowRun(id: 1, name: "CI", status: .failed, headSha: "abc")] }
+            fixOutcome: { FixAttempt(outcome: .pushedToBranch("feature-x"), fixSHA: "fixsha") },
+            rerunResult: { _ in [WorkflowRun(id: 1, name: "CI", status: .failed, headSha: "abc")] }
         )
         let daemon = Daemon(maxAttempts: 3, notifier: notifier, engine: engine)
         let result = daemon.handleFailedRun(project: "demo", branch: "feature-x", sha: "abc",
                                             failedRun: WorkflowRun(id: 1, name: "CI", status: .failed, headSha: "abc"))
-        XCTAssertEqual(result, .gaveUp)
+        XCTAssertEqual(result, FixOutcome.gaveUp)
+    }
+
+    func testRerunUsesFixSHANotOriginalSHA() {
+        let notifier = SpyNotifier()
+        var rerunSHAs: [String] = []
+        let engine = StubFixEngine(
+            onAttempt: {},
+            signatureProvider: { _ in FailureSignature(job: "t", step: "s", hash: "first") },
+            fixOutcome: { FixAttempt(outcome: .pushedToBranch("feature-x"), fixSHA: "fixsha123") },
+            rerunResult: { sha in rerunSHAs.append(sha); return [] }
+        )
+        let daemon = Daemon(maxAttempts: 3, notifier: notifier, engine: engine)
+        _ = daemon.handleFailedRun(project: "demo", branch: "feature-x", sha: "originsha",
+                                   failedRun: WorkflowRun(id: 1, name: "CI", status: .failed, headSha: "originsha"))
+        XCTAssertEqual(rerunSHAs, ["fixsha123"], "rerun must use the fix commit SHA, not the original")
     }
 }
 
@@ -63,19 +78,19 @@ final class DaemonTests: XCTestCase {
 final class StubFixEngine: FixEngine, @unchecked Sendable {
     let onAttempt: () -> Void
     let signatureProvider: (WorkflowRun) -> FailureSignature
-    let fixOutcome: () -> PublishOutcome
-    let rerunResult: () -> [WorkflowRun]
+    let fixOutcome: () -> FixAttempt
+    let rerunResult: (String) -> [WorkflowRun]
     init(onAttempt: @escaping () -> Void,
          signatureProvider: @escaping (WorkflowRun) -> FailureSignature,
-         fixOutcome: @escaping () -> PublishOutcome,
-         rerunResult: @escaping () -> [WorkflowRun]) {
+         fixOutcome: @escaping () -> FixAttempt,
+         rerunResult: @escaping (String) -> [WorkflowRun]) {
         self.onAttempt = onAttempt; self.signatureProvider = signatureProvider
         self.fixOutcome = fixOutcome; self.rerunResult = rerunResult
     }
     func signature(of run: WorkflowRun, project: String) throws -> FailureSignature { signatureProvider(run) }
-    func attemptFix(project: String, branch: String, sha: String, run: WorkflowRun) throws -> PublishOutcome {
+    func attemptFix(project: String, branch: String, sha: String, run: WorkflowRun) throws -> FixAttempt {
         onAttempt(); return fixOutcome()
     }
-    func rerunFailures(project: String, sha: String) throws -> [WorkflowRun] { rerunResult() }
+    func rerunFailures(project: String, sha: String) throws -> [WorkflowRun] { rerunResult(sha) }
     func recordOutcome(project: String, signature: FailureSignature, summary: String, succeeded: Bool) {}
 }

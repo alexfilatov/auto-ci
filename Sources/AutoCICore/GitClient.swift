@@ -45,4 +45,7 @@ public struct GitClient: Sendable {
     public func commitDiff(sha: String, cwd: String) throws -> String {
         try git(["show", sha], cwd: cwd)
     }
+    public func headSHA(cwd: String) throws -> String {
+        try git(["rev-parse", "HEAD"], cwd: cwd).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

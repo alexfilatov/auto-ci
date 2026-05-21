@@ -16,10 +16,18 @@ public enum FixOutcome: Sendable, Equatable {
     case fixed, stuck, gaveUp, errored
 }
 
+public struct FixAttempt: Sendable {
+    public let outcome: PublishOutcome
+    public let fixSHA: String
+    public init(outcome: PublishOutcome, fixSHA: String) {
+        self.outcome = outcome; self.fixSHA = fixSHA
+    }
+}
+
 /// The work the Daemon orchestrates. Real impl wraps ClonePool/ContextBuilder/FixRunner/Publisher/RunWatcher.
 public protocol FixEngine: Sendable {
     func signature(of run: WorkflowRun, project: String) throws -> FailureSignature
-    func attemptFix(project: String, branch: String, sha: String, run: WorkflowRun) throws -> PublishOutcome
+    func attemptFix(project: String, branch: String, sha: String, run: WorkflowRun) throws -> FixAttempt
     func rerunFailures(project: String, sha: String) throws -> [WorkflowRun]
     func recordOutcome(project: String, signature: FailureSignature, summary: String, succeeded: Bool)
 }
@@ -36,18 +44,18 @@ public final class Daemon: @unchecked Sendable {
     public func handleFailedRun(project: String, branch: String, sha: String, failedRun: WorkflowRun) -> FixOutcome {
         var previousSignature: FailureSignature?
         var currentRun = failedRun
-        for attempt in 1...maxAttempts {
+        for _ in 1...maxAttempts {
             do {
                 let sig = try engine.signature(of: currentRun, project: project)
 
-                let outcome = try engine.attemptFix(project: project, branch: branch, sha: sha, run: currentRun)
+                let attempt = try engine.attemptFix(project: project, branch: branch, sha: sha, run: currentRun)
                 let detail: String
-                switch outcome {
+                switch attempt.outcome {
                 case .pushedToBranch(let b): detail = "pushed to \(b)"
                 case .openedPR(let url, _): detail = "opened PR \(url)"
                 }
 
-                let failures = try engine.rerunFailures(project: project, sha: sha)
+                let failures = try engine.rerunFailures(project: project, sha: attempt.fixSHA)
                 if failures.isEmpty {
                     engine.recordOutcome(project: project, signature: sig, summary: detail, succeeded: true)
                     notifier.notify(.fixed(project: project, branch: branch, detail: detail))
@@ -62,7 +70,6 @@ public final class Daemon: @unchecked Sendable {
                     return .stuck
                 }
                 previousSignature = sig
-                _ = attempt
             } catch {
                 notifier.notify(.error(project: project, message: "\(error)"))
                 return .errored

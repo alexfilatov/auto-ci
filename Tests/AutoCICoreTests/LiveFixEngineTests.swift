@@ -17,9 +17,9 @@ final class LiveFixEngineTests: XCTestCase {
         fake.stub(command: "git", args: ["diff"], stdout: "diff --git a b\n+import x")
         let project = ProjectConfig(name: "demo", path: "/src/demo", remote: "git@github.com:x/y.git")
         let engine = LiveFixEngine(config: project, root: root, runner: fake, workflowYAML: "name: CI")
-        let outcome = try engine.attemptFix(project: "demo", branch: "feature-x", sha: "abc",
+        let attempt = try engine.attemptFix(project: "demo", branch: "feature-x", sha: "abc",
                                             run: WorkflowRun(id: 9, name: "CI", status: .failed, headSha: "abc"))
-        if case .pushedToBranch(let b) = outcome { XCTAssertEqual(b, "feature-x") }
+        if case .pushedToBranch(let b) = attempt.outcome { XCTAssertEqual(b, "feature-x") }
         else { XCTFail("expected push to feature-x") }
         XCTAssertTrue(fake.calls.contains { $0.command == "claude" })
     }

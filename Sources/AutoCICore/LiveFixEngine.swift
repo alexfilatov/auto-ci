@@ -33,18 +33,17 @@ public final class LiveFixEngine: FixEngine, @unchecked Sendable {
         return signatures.signature(job: run.name, step: run.name, logs: logs)
     }
 
-    public func attemptFix(project: String, branch: String, sha: String, run: WorkflowRun) throws -> PublishOutcome {
+    public func attemptFix(project: String, branch: String, sha: String, run: WorkflowRun) throws -> FixAttempt {
         let clone = try pool.prepare(project: config.name, remoteURL: config.remote, sha: sha)
         let builder = ContextBuilder(github: github, git: git, memory: memory, signatures: signatures)
         let ctx = try builder.build(runId: run.id, job: run.name, step: run.name, sha: sha,
                                     clonePath: clone, workflowYAML: workflowYAML)
         let fix = try fixRunner.run(context: ctx, clonePath: clone)
-        return try publisher.publish(branch: branch, protectedBranches: config.protectedBranches,
-                                     clonePath: clone, summary: fix.summary, runId: run.id)
+        let publishResult = try publisher.publish(branch: branch, protectedBranches: config.protectedBranches,
+                                                  clonePath: clone, summary: fix.summary, runId: run.id)
+        return FixAttempt(outcome: publishResult.outcome, fixSHA: publishResult.fixSHA)
     }
 
-    /// NOTE (v1 limitation): re-polls the original SHA's runs rather than the fix commit's runs.
-    /// A follow-up should track the fix commit SHA returned from push.
     public func rerunFailures(project: String, sha: String) throws -> [WorkflowRun] {
         let clone = pool.cloneDir(project: config.name)
         return try watcher.waitForTerminal(sha: sha, cwd: clone)
