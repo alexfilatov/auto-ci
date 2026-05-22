@@ -1,41 +1,94 @@
 #!/bin/bash
-# Remote bootstrap installer for Auto-CI.
+# Auto-CI installer.
 #
 #   curl -fsSL https://raw.githubusercontent.com/alexfilatov/auto-ci/main/install.sh | bash
 #
-# Clones (or updates) the repo into ~/.auto-ci/src, builds the CLI + menubar app
-# from source, installs AutoCI.app to /Applications and the auto-ci CLI to
-# /usr/local/bin, and launches the app.
+# Tries prebuilt binaries first (no Xcode needed). If no release is available,
+# falls back to building from source (requires Xcode/Swift).
 set -euo pipefail
 
-REPO_URL="https://github.com/alexfilatov/auto-ci.git"
+REPO="alexfilatov/auto-ci"
+BASE="https://github.com/${REPO}/releases/latest/download"
 SRC_DIR="${HOME}/.auto-ci/src"
 
-say() { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
-die() { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
+step() { printf '\033[1;34m▸\033[0m %s\n' "$1"; }
+ok()   { printf '  \033[1;32m✓\033[0m %s\n' "$1"; }
+warn() { printf '  \033[1;33m!\033[0m %s\n' "$1"; }
+die()  { printf '\033[1;31m✗\033[0m %s\n' "$1" >&2; exit 1; }
 
-# --- Prerequisites (build-time) ---
-command -v git >/dev/null 2>&1 || die "git is required. Install Xcode Command Line Tools: xcode-select --install"
-if ! command -v swift >/dev/null 2>&1; then
-    die "swift is required. Install Xcode from the App Store (or 'xcode-select --install'), then re-run."
-fi
+[ "$(uname -s)" = "Darwin" ] || die "Auto-CI is macOS-only."
 
-case "$(uname -s)" in
-    Darwin) ;;
-    *) die "Auto-CI is macOS-only." ;;
-esac
+# Pick the first writable bin dir for the CLI.
+cli_dir() {
+    for d in /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin"; do
+        if [ -d "$d" ] && [ -w "$d" ]; then echo "$d"; return; fi
+    done
+    mkdir -p "$HOME/.local/bin"; echo "$HOME/.local/bin"
+}
 
-# --- Fetch source ---
-if [ -d "${SRC_DIR}/.git" ]; then
-    say "Updating existing checkout at ${SRC_DIR}"
-    git -C "${SRC_DIR}" fetch --quiet origin
-    git -C "${SRC_DIR}" reset --hard --quiet origin/main
-else
-    say "Cloning ${REPO_URL} into ${SRC_DIR}"
-    mkdir -p "$(dirname "${SRC_DIR}")"
-    git clone --quiet "${REPO_URL}" "${SRC_DIR}"
-fi
+install_prebuilt() {
+    local tmp; tmp="$(mktemp -d)"
+    step "Downloading prebuilt Auto-CI (no Xcode needed)…"
+    if ! curl -fsSL "${BASE}/AutoCI.app.zip" -o "$tmp/AutoCI.app.zip"; then
+        rm -rf "$tmp"; return 1
+    fi
+    curl -fsSL "${BASE}/auto-ci" -o "$tmp/auto-ci" || { rm -rf "$tmp"; return 1; }
+    ok "Downloaded latest release"
 
-# --- Build + install (delegates to the in-repo installer) ---
-say "Building and installing"
-exec bash "${SRC_DIR}/scripts/install.sh"
+    step "Installing the menubar app"
+    ditto -x -k "$tmp/AutoCI.app.zip" "$tmp/extracted"
+    # Strip the Gatekeeper quarantine flag so the unsigned app opens cleanly.
+    xattr -dr com.apple.quarantine "$tmp/extracted/AutoCI.app" 2>/dev/null || true
+    rm -rf /Applications/AutoCI.app
+    cp -R "$tmp/extracted/AutoCI.app" /Applications/AutoCI.app
+    ok "AutoCI.app → /Applications"
+
+    step "Installing the auto-ci command"
+    local dir; dir="$(cli_dir)"
+    cp "$tmp/auto-ci" "$dir/auto-ci"
+    chmod +x "$dir/auto-ci"
+    xattr -dr com.apple.quarantine "$dir/auto-ci" 2>/dev/null || true
+    ok "auto-ci → $dir"
+    case ":$PATH:" in
+        *":$dir:"*) ;;
+        *) warn "Add it to your PATH:  echo 'export PATH=\"$dir:\$PATH\"' >> ~/.zshrc && source ~/.zshrc" ;;
+    esac
+
+    rm -rf "$tmp"
+    finish
+}
+
+install_from_source() {
+    warn "No prebuilt release found — building from source (requires Xcode/Swift)."
+    command -v git   >/dev/null 2>&1 || die "git is required. Install: xcode-select --install"
+    command -v swift >/dev/null 2>&1 || die "swift is required. Install Xcode, then re-run."
+    if [ -d "${SRC_DIR}/.git" ]; then
+        step "Updating source at ${SRC_DIR}"
+        git -C "${SRC_DIR}" fetch --quiet origin && git -C "${SRC_DIR}" reset --hard --quiet origin/main
+    else
+        step "Cloning into ${SRC_DIR}"
+        mkdir -p "$(dirname "${SRC_DIR}")"
+        git clone --quiet "https://github.com/${REPO}.git" "${SRC_DIR}"
+    fi
+    exec bash "${SRC_DIR}/scripts/install.sh"
+}
+
+finish() {
+    step "Launching Auto-CI"
+    open /Applications/AutoCI.app
+    ok "Running — look for the 🔧 icon in your menu bar (top-right)"
+    cat <<EOF
+
+🎉 Auto-CI is installed.
+
+Next steps:
+  auto-ci doctor          check that gh + claude are installed and signed in
+  cd <your-repo>
+  auto-ci init            start watching this repo
+
+Then just 'git push' as usual — Auto-CI fixes failing CI on its own.
+EOF
+    exit 0
+}
+
+install_prebuilt || install_from_source

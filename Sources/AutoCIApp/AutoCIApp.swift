@@ -41,19 +41,11 @@ struct AutoCIApp: App {
                 }
             }
 
-            Menu("About Auto-CI") {
-                Text("Built by Alex Filatov, who was far too lazy to keep refreshing")
-                Text("the Actions tab to see if CI went red again. So now a robot")
-                Text("babysits the pipeline and fixes it while he naps. 🛠️😴")
-                Divider()
-                Link("Alex Filatov on LinkedIn ↗",
-                     destination: URL(string: "https://www.linkedin.com/in/alexfilatov/")!)
-            }
-
             Divider()
             Button(controller.launchAtLogin ? "✓ Start at Login" : "Start at Login") {
                 controller.toggleLaunchAtLogin()
             }
+            Button("About") { controller.showAbout() }
             Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
         } label: {
             Image(nsImage: AutoCIIcon(color: controller.state.color).rendered())
@@ -220,6 +212,29 @@ final class AppController: ObservableObject, Notifier {
     func clearHistory() {
         history.clear()
         groupedHistory = []
+    }
+
+    /// Show a native About popup with readable text and a clickable LinkedIn link.
+    func showAbout() {
+        let body = NSMutableAttributedString(
+            string: "Built by Alex Filatov, who was far too lazy to keep refreshing the "
+                  + "Actions tab to see if CI went red again. So now a robot babysits the "
+                  + "pipeline and fixes it while he naps. 🛠️😴\n\n",
+            attributes: [.foregroundColor: NSColor.labelColor,
+                         .font: NSFont.systemFont(ofSize: 11)]
+        )
+        body.append(NSAttributedString(
+            string: "Alex Filatov on LinkedIn ↗",
+            attributes: [.link: URL(string: "https://www.linkedin.com/in/alexfilatov/")!,
+                         .font: NSFont.systemFont(ofSize: 11)]
+        ))
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "Auto-CI",
+            .credits: body,
+            NSApplication.AboutPanelOptionKey(rawValue: "Copyright"):
+                "Auto-fixes your CI so you don't have to."
+        ])
     }
 
     nonisolated func notify(_ event: DaemonEvent) {

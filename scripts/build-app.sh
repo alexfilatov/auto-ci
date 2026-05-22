@@ -10,11 +10,13 @@ APP_NAME="AutoCI"
 BUNDLE_ID="com.alexfilatov.autoci"
 APP_DIR="${APP_NAME}.app"
 TOOL_PATH="/opt/homebrew/bin:${HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+# Set AUTOCI_SWIFT_FLAGS="--arch arm64 --arch x86_64" to build a universal binary for releases.
+SWIFT_FLAGS="${AUTOCI_SWIFT_FLAGS:-}"
 
 echo "==> Building release binary"
-swift build -c release --product AutoCIApp
+swift build -c release $SWIFT_FLAGS --product AutoCIApp
 
-BIN_PATH="$(swift build -c release --product AutoCIApp --show-bin-path)/AutoCIApp"
+BIN_PATH="$(swift build -c release $SWIFT_FLAGS --product AutoCIApp --show-bin-path)/AutoCIApp"
 
 echo "==> Assembling ${APP_DIR}"
 rm -rf "${APP_DIR}"
