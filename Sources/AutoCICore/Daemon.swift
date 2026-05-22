@@ -12,6 +12,26 @@ public protocol Notifier: Sendable {
     func notify(_ event: DaemonEvent)
 }
 
+/// A Notifier that prints each event to stdout. Used by the CLI `fix` command.
+public struct ConsoleNotifier: Notifier {
+    private let emit: @Sendable (String) -> Void
+    public init(emit: @escaping @Sendable (String) -> Void = { print($0) }) {
+        self.emit = emit
+    }
+    public func notify(_ event: DaemonEvent) {
+        switch event {
+        case .fixed(let project, let branch, let detail):
+            emit("✓ Fixed \(project) on \(branch): \(detail)")
+        case .stuck(let project, let branch):
+            emit("⚠ Stuck on \(project) (\(branch)) — same failure recurred.")
+        case .gaveUp(let project, let branch):
+            emit("✗ Gave up on \(project) (\(branch)) after max attempts.")
+        case .error(let project, let message):
+            emit("✗ Error on \(project): \(message)")
+        }
+    }
+}
+
 public enum FixOutcome: Sendable, Equatable {
     case fixed, stuck, gaveUp, errored
 }
