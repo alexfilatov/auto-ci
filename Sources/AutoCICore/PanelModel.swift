@@ -84,3 +84,24 @@ public func historyMarker(forKind kind: String) -> String {
     default: return "•"
     }
 }
+
+/// Title + subtitle for the summary bar. Title precedence: setup issues, then needs-you,
+/// then fixing, then all-clear. Empty list = no repos.
+public func summaryRollup(states: [CIState], hasSetupIssues: Bool) -> (title: String, subtitle: String) {
+    if hasSetupIssues { return ("Setup required", "Resolve the issues below") }
+    if states.isEmpty { return ("No repos watched", "Run `auto-ci init` in a repo") }
+
+    let needYou = states.filter { $0 == .attention }.count
+    let fixing = states.filter { $0 == .fixing }.count
+    let subtitle = "\(states.count) watched · \(fixing) fixing · \(needYou) need you"
+
+    let title: String
+    if needYou > 0 {
+        title = needYou == 1 ? "1 repo needs you" : "\(needYou) repos need you"
+    } else if fixing > 0 {
+        title = fixing == 1 ? "Fixing 1 repo" : "Fixing \(fixing) repos"
+    } else {
+        title = "All clear"
+    }
+    return (title, subtitle)
+}
