@@ -58,6 +58,7 @@ struct AutoCIApp: App {
             Button(controller.launchAtLogin ? "✓ Start at Login" : "Start at Login") {
                 controller.toggleLaunchAtLogin()
             }
+            SettingsLink { Text("Settings…") }
             Button("About") { controller.showAbout() }
             Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
         } label: {
@@ -65,11 +66,15 @@ struct AutoCIApp: App {
                 .rendered(template: controller.state == .idle))
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsView(controller: controller)
+        }
     }
 
     @ViewBuilder
     private func entryView(_ entry: HistoryEntry) -> some View {
-        let mark = entry.kind == "fixed" ? "✓" : "⚠"
+        let mark = entry.kind == "fixed" ? "✓" : entry.kind == "deferred" ? "⏸" : "⚠"
         let label = "\(mark) \(entry.branch) — \(entry.detail)"
         if let urlString = entry.runURL, let link = URL(string: urlString) {
             Link("\(label) ↗", destination: link)
@@ -200,6 +205,9 @@ final class AppController: ObservableObject, Notifier {
         let enterFixingFn: @Sendable (String) -> Void = { [weak self] url in
             Task { await self?.enterFixing(branch: eventBranch, runURL: url) }
         }
+        let enterHoldingFn: @Sendable () -> Void = { [weak self] in
+            Task { await self?.enterHolding(branch: eventBranch, graceSeconds: configCopy.graceSeconds) }
+        }
 
         await Task.detached { @Sendable in
             do {
@@ -211,6 +219,22 @@ final class AppController: ObservableObject, Notifier {
                     notifyFn(.fixed(project: configCopy.name, branch: eventBranch, detail: "green, nothing to do"))
                     return
                 }
+
+                // Grace gate: auto-ci is a secondary fixer. Wait out the grace period and
+                // defer if a human (or another agent) is already handling this failure.
+                enterHoldingFn()
+                let gate = GraceGate(git: GitClient(runner: runner),
+                                     leases: LeaseStore(root: ConfigStore.defaultRoot),
+                                     graceSeconds: configCopy.graceSeconds)
+                switch gate.evaluate(project: configCopy.name, branch: eventBranch,
+                                     failedSHA: eventSha, cwd: clone) {
+                case .deferred(let reason):
+                    notifyFn(.deferred(project: configCopy.name, branch: eventBranch, reason: reason))
+                    return
+                case .proceed:
+                    break
+                }
+
                 enterFixingFn(firstFailure.url)
                 let engine = LiveFixEngine(config: configCopy, root: ConfigStore.defaultRoot,
                                            runner: runner, workflowYAML: workflowYAML)
@@ -226,6 +250,14 @@ final class AppController: ObservableObject, Notifier {
     private func enterWatching(branch: String) {
         state = .watching
         statusLine = "Watching \(branch)…"
+        currentRunURL = nil
+    }
+
+    /// Auto-ci has seen a failure but is holding back during the grace period to let a
+    /// human or another agent take it first. Stays in the (benign) watching state.
+    private func enterHolding(branch: String, graceSeconds: Int) {
+        state = .watching
+        statusLine = "CI failed on \(branch) — waiting \(graceSeconds)s to see if it's handled…"
         currentRunURL = nil
     }
 
@@ -249,6 +281,11 @@ final class AppController: ObservableObject, Notifier {
     func stopWatching(_ project: ProjectConfig) {
         try? HookInstaller().uninstall(repoPath: project.path)
         try? store.remove(named: project.name)
+        projects = store.projects()
+    }
+
+    func updateProject(_ config: ProjectConfig) {
+        try? store.upsert(config)
         projects = store.projects()
     }
 
@@ -306,10 +343,11 @@ final class AppController: ObservableObject, Notifier {
             statusLine = title
             (project, branch, kind, detail) = (p, "", "error", message)
         case .deferred(let p, let br, let reason):
-            (title, body) = ("CI deferred ⏸", "\(br): \(reason)")
-            statusLine = title
+            // Deferral is benign — auto-ci stood down because someone else is handling it.
+            (title, body) = ("Auto-CI stood down", "\(br): \(reason)")
+            state = .idle
+            statusLine = "Stood down — \(br) is being fixed elsewhere"
             (project, branch, kind, detail) = (p, br, "deferred", reason)
-            scheduleIdleReset()
         }
 
         let entry = HistoryEntry(project: project, branch: branch, kind: kind,
