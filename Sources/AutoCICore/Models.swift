@@ -6,7 +6,7 @@ public struct ProjectConfig: Codable, Equatable, Sendable {
     public var path: String
     public var remote: String
     public var protectedBranches: [String]
-    public init(name: String, path: String, remote: String, protectedBranches: [String] = ["main", "master"]) {
+    public init(name: String, path: String, remote: String, protectedBranches: [String] = ["main"]) {
         self.name = name; self.path = path; self.remote = remote; self.protectedBranches = protectedBranches
     }
 }
