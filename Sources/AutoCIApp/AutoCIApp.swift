@@ -88,12 +88,11 @@ struct AutoCIApp: App {
     }
 }
 
-/// The single Auto-CI glyph stays the same in every state — only the color changes.
-enum AppState: Equatable {
-    case idle, watching, fixing, fixed, attention
+/// UI presentation for the Core CIState. The glyph is identical in every state — only color changes.
+extension CIState {
     var color: Color {
         switch self {
-        case .idle: return .black   // rendered as a template image → auto-tinted by the menu bar
+        case .idle: return .black   // template image → auto-tinted by the menu bar
         case .watching: return .blue
         case .fixing: return .orange
         case .fixed: return .green
@@ -101,11 +100,9 @@ enum AppState: Equatable {
         }
     }
 
-    /// True while Auto-CI is actively working (dot pulses).
     var isActive: Bool { self == .watching || self == .fixing }
 
-    /// A colored status dot for the dropdown header. Emoji renders reliably in
-    /// color inside a native menu (a SwiftUI shape does not).
+    /// A colored status dot that renders reliably in color inside native UI.
     var dotEmoji: String {
         switch self {
         case .watching: return "🔵"
@@ -119,15 +116,25 @@ enum AppState: Equatable {
 
 @MainActor
 final class AppController: ObservableObject, Notifier {
+    /// Per-project live state — the source of truth for the grid.
+    @Published var projectStates: [String: ProjectLiveState] = [:]
+    /// App-level status message (setup/login errors), shown when no per-project context applies.
     @Published var statusLine = "Idle — watching for pushes"
     @Published var groupedHistory: [ProjectHistory] = []
     @Published var setupIssues: [String] = []
-    @Published var state: AppState = .idle
-    @Published var currentRunURL: String?
     @Published var launchAtLogin: Bool = false
     @Published var projects: [ProjectConfig] = []
     @Published var lastError: String?
     @Published var lastErrorURL: String?
+
+    /// Worst state across all projects; drives the menubar glyph color + summary bar.
+    var state: CIState { worstState(projectStates.values.map { $0.state }) }
+
+    /// The live state for a project (idle default if unseen).
+    func liveState(_ project: String) -> ProjectLiveState { projectStates[project] ?? ProjectLiveState() }
+
+    /// Convenience for the currently-active run URL (first project that has one).
+    var currentRunURL: String? { projectStates.values.compactMap { $0.runURL }.first }
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
@@ -180,7 +187,6 @@ final class AppController: ObservableObject, Notifier {
             guard let self else { return }
             let problems = statuses.filter { !$0.ok }
             guard !problems.isEmpty else { return }
-            self.state = .attention
             self.statusLine = "Setup required"
             self.setupIssues = problems.map { $0.hint }
         }
@@ -278,11 +284,9 @@ final class AppController: ObservableObject, Notifier {
     }
 
     private func enterWatching(project: String, branch: String) {
-        state = .watching
-        statusLine = "Watching \(project)/\(branch)…"
-        currentRunURL = nil
-        lastError = nil
-        lastErrorURL = nil
+        projectStates[project] = ProjectLiveState(
+            state: .watching, statusLine: "Watching \(project)/\(branch)…", branch: branch)
+        lastError = nil; lastErrorURL = nil
     }
 
     /// Show the last error in a readable popup, with a button to open the workflow run if known.
@@ -303,23 +307,25 @@ final class AppController: ObservableObject, Notifier {
         }
     }
 
-    /// Auto-ci has seen a failure but is holding back during the grace period to let a
-    /// human or another agent take it first. Stays in the (benign) watching state.
+    /// Saw a failure but holding back during the grace period. Stays benign (watching).
     private func enterHolding(project: String, branch: String, graceSeconds: Int) {
-        state = .watching
-        statusLine = "CI failed on \(project)/\(branch) — waiting \(graceSeconds)s to see if it's handled…"
-        currentRunURL = nil
+        projectStates[project] = ProjectLiveState(
+            state: .watching,
+            statusLine: "CI failed on \(project)/\(branch) — waiting \(graceSeconds)s to see if it's handled…",
+            branch: branch)
     }
 
     private func enterFixing(project: String, branch: String, runURL: String) {
-        state = .fixing
-        statusLine = "Fixing \(project)/\(branch)…"
-        currentRunURL = runURL.isEmpty ? nil : runURL
+        projectStates[project] = ProjectLiveState(
+            state: .fixing, statusLine: "Fixing \(project)/\(branch)…",
+            runURL: runURL.isEmpty ? nil : runURL, branch: branch)
     }
 
-    private func returnToIdle() {
-        state = .idle
-        statusLine = "Idle — watching for pushes"
+    private func returnToIdle(project: String) {
+        if var s = projectStates[project] {
+            s.state = .idle; s.statusLine = "Idle — watching for pushes"; s.runURL = nil
+            projectStates[project] = s
+        }
     }
 
     func clearHistory() {
@@ -374,33 +380,34 @@ final class AppController: ObservableObject, Notifier {
         switch event {
         case .fixed(let p, let br, let det):
             (title, body) = ("CI fixed ✓", "\(p)/\(br): \(det)")
-            state = .fixed
-            statusLine = "CI fixed ✓ — \(p)/\(br)"
+            projectStates[p] = ProjectLiveState(state: .fixed, statusLine: "CI fixed ✓ — \(p)/\(br)",
+                                                runURL: liveState(p).runURL, branch: br)
             (project, branch, kind, detail) = (p, br, "fixed", det)
-            // Drop back to idle shortly so the menubar reflects "watching" again.
-            scheduleIdleReset()
+            scheduleIdleReset(project: p)
         case .stuck(let p, let br):
             (title, body) = ("CI stuck — needs you", "\(p)/\(br)")
-            state = .attention
-            statusLine = "CI stuck — needs you: \(p)/\(br)"
+            projectStates[p] = ProjectLiveState(state: .attention,
+                                                statusLine: "CI stuck — needs you: \(p)/\(br)",
+                                                runURL: liveState(p).runURL, branch: br)
             (project, branch, kind, detail) = (p, br, "stuck", "stuck — needs you")
         case .gaveUp(let p, let br):
             (title, body) = ("CI fix gave up", "\(p)/\(br)")
-            state = .attention
-            statusLine = "CI fix gave up: \(p)/\(br)"
+            projectStates[p] = ProjectLiveState(state: .attention,
+                                                statusLine: "CI fix gave up: \(p)/\(br)",
+                                                runURL: liveState(p).runURL, branch: br)
             (project, branch, kind, detail) = (p, br, "gaveUp", "fix gave up")
         case .error(let p, let message):
             (title, body) = ("Auto-CI error", "\(p): \(message)")
-            state = .attention
-            statusLine = "Auto-CI error — \(p)"
+            projectStates[p] = ProjectLiveState(state: .attention, statusLine: "Auto-CI error — \(p)",
+                                                runURL: liveState(p).runURL, branch: liveState(p).branch)
             lastError = message
-            lastErrorURL = currentRunURL
+            lastErrorURL = liveState(p).runURL
             (project, branch, kind, detail) = (p, "", "error", message)
         case .deferred(let p, let br, let reason):
-            // Deferral is benign — auto-ci stood down because someone else is handling it.
             (title, body) = ("Auto-CI stood down", "\(p)/\(br): \(reason)")
-            state = .idle
-            statusLine = "Stood down — \(p)/\(br) is being fixed elsewhere"
+            projectStates[p] = ProjectLiveState(state: .idle,
+                                                statusLine: "Stood down — \(p)/\(br) is being fixed elsewhere",
+                                                branch: br)
             (project, branch, kind, detail) = (p, br, "deferred", reason)
         }
 
@@ -416,12 +423,11 @@ final class AppController: ObservableObject, Notifier {
         try? await UNUserNotificationCenter.current().add(req)
     }
 
-    private func scheduleIdleReset() {
+    private func scheduleIdleReset(project: String) {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(8))
             guard let self else { return }
-            // Only reset if nothing newer changed the state to an alert state.
-            if self.state == .fixed { self.returnToIdle() }
+            if self.liveState(project).state == .fixed { self.returnToIdle(project: project) }
         }
     }
 }
