@@ -5,7 +5,7 @@ import XCTest
 final class ModelsTests: XCTestCase {
     func testProjectConfigDefaultsProtectedBranches() {
         let p = ProjectConfig(name: "demo", path: "/tmp/demo", remote: "origin")
-        XCTAssertEqual(p.protectedBranches, ["main", "master"])
+        XCTAssertEqual(p.protectedBranches, ["main"])
     }
 
     func testProjectConfigCodableRoundTrip() throws {
