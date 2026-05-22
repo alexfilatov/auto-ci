@@ -9,7 +9,8 @@ struct AutoCIApp: App {
     @StateObject private var controller = AppController()
     var body: some Scene {
         MenuBarExtra {
-            Text("\(controller.state.dotEmoji)  \(controller.statusLine)").font(.headline)
+            (Text(controller.state.dotEmoji).font(.system(size: 8))
+             + Text("  \(controller.statusLine)").font(.headline))
 
             if let url = controller.currentRunURL, let link = URL(string: url) {
                 Link("View workflow run ↗", destination: link)
