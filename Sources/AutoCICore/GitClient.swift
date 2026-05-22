@@ -52,4 +52,11 @@ public struct GitClient: Sendable {
     public func headSHA(cwd: String) throws -> String {
         try git(["rev-parse", "HEAD"], cwd: cwd).trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// SHA the remote currently has for `branch`, or "" if the branch isn't on the remote.
+    public func remoteSHA(branch: String, cwd: String) throws -> String {
+        let out = try git(["ls-remote", "origin", "refs/heads/" + branch], cwd: cwd)
+        guard let firstLine = out.split(separator: "\n").first else { return "" }
+        return firstLine.split(whereSeparator: { $0 == " " || $0 == "\t" }).first.map(String.init) ?? ""
+    }
 }

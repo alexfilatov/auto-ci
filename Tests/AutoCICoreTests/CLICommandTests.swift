@@ -103,6 +103,32 @@ final class CLICommandTests: XCTestCase {
         XCTAssertTrue(out.contains("need attention"))
     }
 
+    func testHoldAndReleaseManageLease() throws {
+        let store = ConfigStore(root: root.appendingPathComponent("cfg"))
+        try store.upsert(ProjectConfig(name: "demo", path: root.path, remote: "git@github.com:x/y.git"))
+        let fake = FakeCommandRunner()
+        fake.stub(command: "git", args: ["rev-parse", "--abbrev-ref", "HEAD"], stdout: "feature\n")
+        let cli = CLICommand(store: store, runner: fake, hookInstaller: HookInstaller(),
+                             socketPath: "/tmp/sock", root: root)
+
+        let held = try cli.run(["hold"], cwd: root.path)
+        XCTAssertTrue(held.contains("Holding"))
+        XCTAssertTrue(LeaseStore(root: root).isHeld(project: "demo", branch: "feature"))
+
+        let released = try cli.run(["release"], cwd: root.path)
+        XCTAssertTrue(released.contains("Released"))
+        XCTAssertFalse(LeaseStore(root: root).isHeld(project: "demo", branch: "feature"))
+    }
+
+    func testHelpListsHoldAndRelease() throws {
+        let store = ConfigStore(root: root.appendingPathComponent("cfg"))
+        let cli = CLICommand(store: store, runner: FakeCommandRunner(),
+                             hookInstaller: HookInstaller(), socketPath: "/tmp/sock")
+        let out = try cli.run(["help"], cwd: root.path)
+        XCTAssertTrue(out.contains("hold"))
+        XCTAssertTrue(out.contains("release"))
+    }
+
     func testListShowsProjects() throws {
         let store = ConfigStore(root: root.appendingPathComponent("cfg"))
         try store.upsert(ProjectConfig(name: "demo", path: "/x", remote: "origin"))

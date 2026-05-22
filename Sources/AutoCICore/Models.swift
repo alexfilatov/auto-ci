@@ -8,21 +8,24 @@ public struct ProjectConfig: Codable, Equatable, Sendable {
     public var protectedBranches: [String]
     public var protectTests: Bool
     public var testPathPatterns: [String]
+    public var graceSeconds: Int
 
     public static let defaultTestPathPatterns = ["tests/", "_test", ".test.", "spec", "/test"]
 
     public init(name: String, path: String, remote: String,
                 protectedBranches: [String] = ["main", "master"],
                 protectTests: Bool = true,
-                testPathPatterns: [String] = ProjectConfig.defaultTestPathPatterns) {
+                testPathPatterns: [String] = ProjectConfig.defaultTestPathPatterns,
+                graceSeconds: Int = 180) {
         self.name = name; self.path = path; self.remote = remote
         self.protectedBranches = protectedBranches
         self.protectTests = protectTests
         self.testPathPatterns = testPathPatterns
+        self.graceSeconds = graceSeconds
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, path, remote, protectedBranches, protectTests, testPathPatterns
+        case name, path, remote, protectedBranches, protectTests, testPathPatterns, graceSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -33,6 +36,7 @@ public struct ProjectConfig: Codable, Equatable, Sendable {
         self.protectedBranches = try c.decodeIfPresent([String].self, forKey: .protectedBranches) ?? ["main", "master"]
         self.protectTests = try c.decodeIfPresent(Bool.self, forKey: .protectTests) ?? true
         self.testPathPatterns = try c.decodeIfPresent([String].self, forKey: .testPathPatterns) ?? ProjectConfig.defaultTestPathPatterns
+        self.graceSeconds = try c.decodeIfPresent(Int.self, forKey: .graceSeconds) ?? 180
     }
 }
 

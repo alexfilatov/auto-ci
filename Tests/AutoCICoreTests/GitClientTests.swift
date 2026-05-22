@@ -27,6 +27,21 @@ final class GitClientTests: XCTestCase {
         XCTAssertThrowsError(try git.push(branch: "feature-x", cwd: "/repo"))
     }
 
+    func testRemoteSHAParsesLeadingSHA() throws {
+        let fake = FakeCommandRunner()
+        fake.stub(command: "git", args: ["ls-remote", "origin", "refs/heads/feature"],
+                  stdout: "deadbeef1234\trefs/heads/feature\n")
+        let git = GitClient(runner: fake)
+        XCTAssertEqual(try git.remoteSHA(branch: "feature", cwd: "/repo"), "deadbeef1234")
+    }
+
+    func testRemoteSHAEmptyWhenBranchAbsent() throws {
+        let fake = FakeCommandRunner()
+        fake.stub(command: "git", args: ["ls-remote", "origin", "refs/heads/gone"], stdout: "")
+        let git = GitClient(runner: fake)
+        XCTAssertEqual(try git.remoteSHA(branch: "gone", cwd: "/repo"), "")
+    }
+
     func testDiffReturnsStdout() throws {
         let fake = FakeCommandRunner()
         fake.stub(command: "git", args: ["diff"], stdout: "diff --git a b")

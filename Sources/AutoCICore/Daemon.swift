@@ -6,6 +6,7 @@ public enum DaemonEvent: Sendable, Equatable {
     case stuck(project: String, branch: String)
     case gaveUp(project: String, branch: String)
     case error(project: String, message: String)
+    case deferred(project: String, branch: String, reason: String)
 }
 
 public protocol Notifier: Sendable {
@@ -28,6 +29,8 @@ public struct ConsoleNotifier: Notifier {
             emit("✗ Gave up on \(project) (\(branch)) after max attempts.")
         case .error(let project, let message):
             emit("✗ Error on \(project): \(message)")
+        case .deferred(_, let branch, let reason):
+            emit("⏸ Deferred \(branch): \(reason)")
         }
     }
 }

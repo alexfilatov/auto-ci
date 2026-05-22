@@ -305,6 +305,11 @@ final class AppController: ObservableObject, Notifier {
             state = .attention
             statusLine = title
             (project, branch, kind, detail) = (p, "", "error", message)
+        case .deferred(let p, let br, let reason):
+            (title, body) = ("CI deferred ⏸", "\(br): \(reason)")
+            statusLine = title
+            (project, branch, kind, detail) = (p, br, "deferred", reason)
+            scheduleIdleReset()
         }
 
         let entry = HistoryEntry(project: project, branch: branch, kind: kind,

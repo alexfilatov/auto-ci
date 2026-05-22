@@ -59,6 +59,10 @@ public struct CLICommand: Sendable {
             return doctor()
         case "fix":
             return try runFix(args: Array(args.dropFirst()), cwd: cwd)
+        case "hold":
+            return try runHold(args: Array(args.dropFirst()), cwd: cwd)
+        case "release":
+            return try runRelease(args: Array(args.dropFirst()), cwd: cwd)
         default:
             return "Unknown command: \(cmd)\n\n" + helpText()
         }
@@ -75,6 +79,27 @@ public struct CLICommand: Sendable {
 
         let summary = (fixRunner ?? defaultFixRunner)(project, sha, branch)
         return summary
+    }
+
+    private func runHold(args: [String], cwd: String) throws -> String {
+        guard let project = store.project(forPath: cwd) else {
+            return "Project not registered. Run `auto-ci init` first."
+        }
+        let opts = parseOptions(args)
+        let branch = try opts["branch"] ?? GitClient(runner: runner).currentBranch(cwd: cwd)
+        let minutes = opts["minutes"].flatMap { Int($0) } ?? 30
+        LeaseStore(root: root).hold(project: project.name, branch: branch, minutes: minutes)
+        return "Holding \(branch) (\(minutes) min) — auto-ci will not auto-fix it. Run `auto-ci release` when done."
+    }
+
+    private func runRelease(args: [String], cwd: String) throws -> String {
+        guard let project = store.project(forPath: cwd) else {
+            return "Project not registered. Run `auto-ci init` first."
+        }
+        let opts = parseOptions(args)
+        let branch = try opts["branch"] ?? GitClient(runner: runner).currentBranch(cwd: cwd)
+        LeaseStore(root: root).release(project: project.name, branch: branch)
+        return "Released \(branch) — auto-ci may resume."
     }
 
     private func parseOptions(_ args: [String]) -> [String: String] {
@@ -161,6 +186,11 @@ public struct CLICommand: Sendable {
           fix         Run the fix pipeline once for the current commit
                         --sha <sha>        fix a specific commit instead of HEAD
                         --branch <branch>  treat the fix as targeting this branch
+          hold        Tell auto-ci to stay out of a branch you're fixing yourself
+                        --branch <branch>  branch to hold (default: current branch)
+                        --minutes <n>      how long to hold it (default: 30)
+          release     Release a hold so auto-ci may resume on the branch
+                        --branch <branch>  branch to release (default: current branch)
           doctor      Check that git, gh, and claude are installed and authenticated
           help        Show this help
 
