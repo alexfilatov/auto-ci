@@ -2,15 +2,36 @@
 import Foundation
 
 public struct HookInstaller: Sendable {
-    public init() {}
+    private let runner: CommandRunner
+    public init(runner: CommandRunner = ProcessCommandRunner()) { self.runner = runner }
     private let marker = "# AUTO-CI managed pre-push hook"
 
-    public func install(repoPath: String, socketPath: String, project: String) throws {
-        let hooksDir = repoPath + "/.git/hooks"
+    /// Resolves the effective hooks directory for a repo, honoring `core.hooksPath`
+    /// (Husky v9, lefthook, or a tracked `.githooks/` dir). When `core.hooksPath` is set,
+    /// git ignores `.git/hooks` entirely, so we must install there instead.
+    private func hooksDir(repoPath: String) -> (dir: String, tracked: Bool) {
+        let result = try? runner.run("git", ["-C", repoPath, "config", "core.hooksPath"],
+                                     cwd: nil, stdin: nil, env: nil)
+        if let result, result.exitCode == 0 {
+            let path = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !path.isEmpty {
+                let resolved = path.hasPrefix("/") ? path : repoPath + "/" + path
+                let tracked = !resolved.contains("/.git/")
+                return (resolved, tracked)
+            }
+        }
+        return (repoPath + "/.git/hooks", false)
+    }
+
+    /// Returns human-readable notes about the install (e.g. a warning when the hooks dir is tracked).
+    @discardableResult
+    public func install(repoPath: String, socketPath: String, project: String) throws -> [String] {
+        let (hooksDir, tracked) = hooksDir(repoPath: repoPath)
         try FileManager.default.createDirectory(atPath: hooksDir, withIntermediateDirectories: true)
         let hookPath = hooksDir + "/pre-push"
         let origPath = hookPath + ".auto-ci-orig"
         let fm = FileManager.default
+        var notes: [String] = []
 
         var chainCall = ""
         if fm.fileExists(atPath: hookPath) {
@@ -48,6 +69,11 @@ public struct HookInstaller: Sendable {
         // Record exactly what we installed, so uninstall can detect later edits.
         try? fm.removeItem(atPath: hookPath + ".auto-ci-installed")
         try script.write(toFile: hookPath + ".auto-ci-installed", atomically: true, encoding: .utf8)
+
+        if tracked {
+            notes.append("Note: this repo uses a tracked hooks directory (core.hooksPath). The auto-ci hook will be visible to git — review before committing.")
+        }
+        return notes
     }
 
     /// Removes the managed hook safely, never destroying user changes.
@@ -55,7 +81,8 @@ public struct HookInstaller: Sendable {
     @discardableResult
     public func uninstall(repoPath: String) throws -> [String] {
         let fm = FileManager.default
-        let hookPath = repoPath + "/.git/hooks/pre-push"
+        let (hooksDir, _) = hooksDir(repoPath: repoPath)
+        let hookPath = hooksDir + "/pre-push"
         let origPath = hookPath + ".auto-ci-orig"
         let installedRef = hookPath + ".auto-ci-installed"
         var notes: [String] = []

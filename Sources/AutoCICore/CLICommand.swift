@@ -27,8 +27,9 @@ public struct CLICommand: Sendable {
                 .stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             let project = ProjectConfig(name: name, path: cwd, remote: remote)
             try store.upsert(project)
-            try hookInstaller.install(repoPath: cwd, socketPath: socketPath, project: name)
+            let installNotes = try hookInstaller.install(repoPath: cwd, socketPath: socketPath, project: name)
             var message = "Registered \(name) (\(remote)) and installed pre-push hook."
+            if !installNotes.isEmpty { message += "\n" + installNotes.joined(separator: "\n") }
             let checker = DependencyChecker(runner: runner)
             let problems = checker.check().filter { !$0.ok }
             if !problems.isEmpty {
