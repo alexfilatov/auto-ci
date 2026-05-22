@@ -35,7 +35,18 @@ struct AutoCIApp: App {
                             }
                         }
                     }
+                    Divider()
+                    Button("Clear History") { controller.clearHistory() }
                 }
+            }
+
+            Menu("About Auto-CI") {
+                Text("Built by Alex Filatov, who was far too lazy to keep refreshing")
+                Text("the Actions tab to see if CI went red again. So now a robot")
+                Text("babysits the pipeline and fixes it while he naps. 🛠️😴")
+                Divider()
+                Link("Alex Filatov on LinkedIn ↗",
+                     destination: URL(string: "https://www.linkedin.com/in/alexfilatov/")!)
             }
 
             Divider()
@@ -171,6 +182,11 @@ final class AppController: ObservableObject, Notifier {
     private func returnToIdle() {
         state = .idle
         statusLine = "Idle — watching for pushes"
+    }
+
+    func clearHistory() {
+        history.clear()
+        groupedHistory = []
     }
 
     nonisolated func notify(_ event: DaemonEvent) {

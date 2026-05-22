@@ -26,6 +26,16 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertEqual(all.last?.detail, "first")
     }
 
+    func testClearWipesHistoryAndPersists() throws {
+        let store = HistoryStore(root: dir)
+        store.record(HistoryEntry(project: "a", branch: "main", kind: "fixed", detail: "x",
+                                  runURL: nil, timestamp: Date(timeIntervalSince1970: 100)))
+        store.clear()
+        XCTAssertTrue(store.all().isEmpty)
+        // Persisted: a fresh store reloads empty.
+        XCTAssertTrue(HistoryStore(root: dir).all().isEmpty)
+    }
+
     func testGroupedByProjectOrderedByNewest() throws {
         let store = HistoryStore(root: dir)
         // project "a" has an older entry; project "b" has a newer one → b first.

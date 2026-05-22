@@ -63,6 +63,12 @@ public final class HistoryStore: @unchecked Sendable {
         entries.sorted { $0.timestamp > $1.timestamp }
     }
 
+    /// Wipes all recorded history.
+    public func clear() {
+        entries.removeAll()
+        persist()
+    }
+
     /// Groups, each project's entries most-recent first; groups ordered by their newest entry desc.
     public func grouped() -> [ProjectHistory] {
         let byProject = Dictionary(grouping: all(), by: { $0.project })
