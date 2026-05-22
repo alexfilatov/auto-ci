@@ -279,7 +279,7 @@ final class AppController: ObservableObject, Notifier {
 
     /// Stop watching a project: remove its pre-push hook and unregister it (no CLI needed).
     func stopWatching(_ project: ProjectConfig) {
-        try? HookInstaller().uninstall(repoPath: project.path)
+        _ = try? HookInstaller().uninstall(repoPath: project.path)
         try? store.remove(named: project.name)
         projects = store.projects()
     }
