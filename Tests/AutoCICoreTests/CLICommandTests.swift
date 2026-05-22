@@ -52,6 +52,17 @@ final class CLICommandTests: XCTestCase {
         XCTAssertTrue(out.contains("auto-ci init"))
     }
 
+    func testDoctorReportsMissingTool() throws {
+        let fake = FakeCommandRunner()
+        fake.stub(command: "gh", args: ["--version"], exit: 127)
+        let store = ConfigStore(root: root.appendingPathComponent("cfg"))
+        let cli = CLICommand(store: store, runner: fake, hookInstaller: HookInstaller(), socketPath: "/tmp/sock")
+        let out = try cli.run(["doctor"], cwd: root.path)
+        XCTAssertTrue(out.contains("gh"))
+        XCTAssertTrue(out.contains("brew install gh"))
+        XCTAssertTrue(out.contains("need attention"))
+    }
+
     func testListShowsProjects() throws {
         let store = ConfigStore(root: root.appendingPathComponent("cfg"))
         try store.upsert(ProjectConfig(name: "demo", path: "/x", remote: "origin"))

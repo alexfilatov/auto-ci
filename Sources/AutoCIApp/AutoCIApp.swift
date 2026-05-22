@@ -63,6 +63,22 @@ final class AppController: ObservableObject, Notifier {
     init() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         startListener()
+        runDependencyPreflight()
+    }
+
+    /// On launch, surface missing/unauthenticated CLI dependencies as a "setup required" state.
+    private func runDependencyPreflight() {
+        Task { [weak self] in
+            let statuses = await Task.detached { @Sendable in
+                DependencyChecker(runner: ProcessCommandRunner()).check()
+            }.value
+            guard let self else { return }
+            let problems = statuses.filter { !$0.ok }
+            guard !problems.isEmpty else { return }
+            self.iconName = Icon.attention
+            self.statusLine = "Setup required"
+            self.recent = problems.map { RecentItem(text: $0.hint, url: nil) }
+        }
     }
 
     private func startListener() {

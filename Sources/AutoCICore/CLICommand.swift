@@ -23,7 +23,16 @@ public struct CLICommand: Sendable {
             let project = ProjectConfig(name: name, path: cwd, remote: remote)
             try store.upsert(project)
             try hookInstaller.install(repoPath: cwd, socketPath: socketPath, project: name)
-            return "Registered \(name) (\(remote)) and installed pre-push hook."
+            var message = "Registered \(name) (\(remote)) and installed pre-push hook."
+            let checker = DependencyChecker(runner: runner)
+            let problems = checker.check().filter { !$0.ok }
+            if !problems.isEmpty {
+                message += "\n\nWarning: some dependencies need attention before auto-ci can fix runs:"
+                for p in problems {
+                    message += "\n  - \(p.name): \(p.hint)"
+                }
+            }
+            return message
         case "list":
             let names = store.projects().map { "\($0.name)\t\($0.remote)" }
             return names.isEmpty ? "No projects registered." : names.joined(separator: "\n")
@@ -32,6 +41,8 @@ public struct CLICommand: Sendable {
             try hookInstaller.uninstall(repoPath: cwd)
             try store.remove(named: name)
             return "Uninstalled hook and removed \(name)."
+        case "doctor":
+            return doctor()
         case "fix":
             return try runFix(args: Array(args.dropFirst()), cwd: cwd)
         default:
@@ -96,7 +107,25 @@ public struct CLICommand: Sendable {
         }
     }
 
+    private func doctor() -> String {
+        let statuses = DependencyChecker(runner: runner).check()
+        var lines: [String] = []
+        for s in statuses {
+            if s.ok {
+                let authNote = s.authenticated == true ? " (authenticated)" : ""
+                lines.append("✓ \(s.name)\(authNote)")
+            } else if !s.installed {
+                lines.append("✗ \(s.name) — not installed. \(s.hint)")
+            } else {
+                lines.append("⚠ \(s.name) — installed but not authenticated. \(s.hint)")
+            }
+        }
+        let allOK = statuses.allSatisfy { $0.ok }
+        lines.append(allOK ? "All dependencies OK." : "Some dependencies need attention (see above).")
+        return lines.joined(separator: "\n")
+    }
+
     private func usage() -> String {
-        "Usage: auto-ci <init|list|uninstall|fix [--sha <sha>] [--branch <branch>]>"
+        "Usage: auto-ci <init|list|uninstall|doctor|fix [--sha <sha>] [--branch <branch>]>"
     }
 }
