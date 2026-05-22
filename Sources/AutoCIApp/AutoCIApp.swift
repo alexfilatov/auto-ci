@@ -35,18 +35,7 @@ extension CIState {
         }
     }
 
-    var isActive: Bool { self == .watching || self == .fixing }
 
-    /// A colored status dot that renders reliably in color inside native UI.
-    var dotEmoji: String {
-        switch self {
-        case .watching: return "🔵"
-        case .fixing: return "🟠"
-        case .fixed: return "🟢"
-        case .attention: return "🔴"
-        case .idle: return "⚪️"
-        }
-    }
 }
 
 @MainActor
@@ -71,9 +60,6 @@ final class AppController: ObservableObject, Notifier {
 
     /// The live state for a project (idle default if unseen).
     func liveState(_ project: String) -> ProjectLiveState { projectStates[project] ?? ProjectLiveState() }
-
-    /// Convenience for the currently-active run URL (first project that has one).
-    var currentRunURL: String? { projectStates.values.compactMap { $0.runURL }.first }
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
@@ -273,6 +259,12 @@ final class AppController: ObservableObject, Notifier {
     func clearHistory() {
         history.clear()
         groupedHistory = []
+    }
+
+    /// Clears recorded history for a single project (used from its detail view).
+    func clearHistory(project: String) {
+        history.removeProject(project)
+        groupedHistory = history.grouped()
     }
 
     /// The branch a Hold/Release acts on for a project: its active/most-recent branch.

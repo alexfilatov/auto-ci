@@ -40,19 +40,18 @@ struct ProjectDetailView: View {
     }
 
     private var statusLine: some View {
-        HStack(spacing: 4) {
-            Text(live.statusLine.isEmpty ? "Watching for pushes." : live.statusLine)
-                .font(.system(size: 11.5)).foregroundStyle(.primary)
-            if let urlString = live.runURL, let url = URL(string: urlString) {
-                Link("View run ↗", destination: url).font(.system(size: 11.5))
-            }
-        }
-        .padding(.horizontal, 14).padding(.bottom, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text(live.statusLine.isEmpty ? "Watching for pushes." : live.statusLine)
+            .font(.system(size: 11.5)).foregroundStyle(.primary)
+            .padding(.horizontal, 14).padding(.bottom, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var actions: some View {
         HStack(spacing: 7) {
+            if controller.lastError != nil && live.state == .attention {
+                Button { controller.showErrorDetails() } label: { actionLabel("Error details…") }
+                    .buttonStyle(.plain)
+            }
             if let urlString = live.runURL, let url = URL(string: urlString) {
                 Link(destination: url) { actionLabel("View run ↗") }
             }
@@ -99,8 +98,15 @@ struct ProjectDetailView: View {
     private var historyList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("RECENT").font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary).padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 4)
+                HStack {
+                    Text("RECENT").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                    Spacer()
+                    if !entries.isEmpty {
+                        Button("Clear") { controller.clearHistory(project: project) }
+                            .buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 4)
                 if entries.isEmpty {
                     Text("No fixes yet").font(.caption).foregroundStyle(.secondary).padding(14)
                 } else {
