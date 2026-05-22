@@ -20,6 +20,7 @@ struct PanelView: View {
             footer
         }
         .frame(width: route == .settings || route == .about ? 360 : 320)
+        .background(PanelBackground().ignoresSafeArea())
     }
 
     private func go(_ to: PanelRoute) {

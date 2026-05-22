@@ -21,6 +21,16 @@ enum ACColor {
     // Strokes / separators
     static let strokeSubtle   = Color(nsColor: .separatorColor)
 
+    // Elevated card surface — lighter than the (frosted) panel so cards lift off it.
+    // Light: opaque white card on the grey material; Dark: a grey lifted above the dark window.
+    static let surfaceCard = Color(nsColor: dyn(
+        light: NSColor(srgbRed: 1.00, green: 1.00, blue: 1.00, alpha: 0.95),
+        dark:  NSColor(srgbRed: 1.00, green: 1.00, blue: 1.00, alpha: 0.10)))
+    // Soft drop shadow under cards (subtle; lighter in dark to avoid mud).
+    static let cardShadow = Color(nsColor: dyn(
+        light: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.12),
+        dark:  NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.28)))
+
     // State colors (appearance-aware)
     static let stateIdle = Color(nsColor: dyn(
         light: NSColor(srgbRed: 0.42, green: 0.42, blue: 0.44, alpha: 1),
@@ -48,4 +58,17 @@ enum ACColor {
     private static func dyn(light: NSColor, dark: NSColor) -> NSColor {
         NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light }
     }
+}
+
+/// Frosted system material behind the whole panel — gives the native popover depth
+/// (Control Center / menu-bar popover look) so elevated cards read against it.
+struct PanelBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = .menu
+        v.blendingMode = .behindWindow
+        v.state = .active
+        return v
+    }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }

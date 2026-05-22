@@ -27,7 +27,6 @@ struct SettingsView: View {
                 projectForm
             }
         }
-        .frame(width: 420)
         .onAppear(perform: loadInitialSelection)
     }
 
@@ -96,6 +95,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .onChange(of: selectedName) { _, _ in loadFields() }
     }
 

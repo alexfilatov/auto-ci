@@ -81,10 +81,11 @@ struct ProjectDetailView: View {
         Text(text).font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity)
             .padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: 8)
-                .fill(danger ? ACColor.destructiveFill : ACColor.fillTertiary))
+                .fill(danger ? ACColor.destructiveFill : ACColor.surfaceCard))
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .stroke(danger ? ACColor.stateAttention.opacity(0.25) : ACColor.strokeSubtle, lineWidth: 0.5))
             .foregroundStyle(danger ? ACColor.destructiveText : ACColor.textPrimary)
+            .shadow(color: ACColor.cardShadow, radius: 1.5, x: 0, y: 0.5)
             .contentShape(Rectangle())
     }
 

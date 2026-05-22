@@ -83,8 +83,9 @@ struct ProjectTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 11).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 11).fill(ACColor.fillQuaternary))
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(ACColor.strokeSubtle, lineWidth: 0.5))
+        .background(RoundedRectangle(cornerRadius: 10).fill(ACColor.surfaceCard))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(ACColor.strokeSubtle, lineWidth: 0.5))
+        .shadow(color: ACColor.cardShadow, radius: 2.5, x: 0, y: 1)
     }
 
     private var stateLabel: String {
@@ -129,7 +130,8 @@ struct FixingTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 11).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 11).fill(ACColor.fillTertiary))
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(ACColor.stateFixing.opacity(0.35), lineWidth: 0.5))
+        .background(RoundedRectangle(cornerRadius: 10).fill(ACColor.surfaceCard))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(ACColor.stateFixing.opacity(0.45), lineWidth: 1))
+        .shadow(color: ACColor.cardShadow, radius: 2.5, x: 0, y: 1)
     }
 }
