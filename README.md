@@ -24,21 +24,15 @@ A naive auto-fixer will happily make CI green by *weakening the test that caught
 
 ## Install
 
-Auto-CI isn't on the App Store — install it from source with one line. This clones the repo into `~/.auto-ci/src`, builds the menubar app + CLI, installs `AutoCI.app` to `/Applications` and the `auto-ci` CLI to `/usr/local/bin`, and launches it:
+Auto-CI isn't on the App Store. Install it with one line — **no Xcode required**. This downloads the prebuilt universal (Apple Silicon + Intel) release, installs `AutoCI.app` to `/Applications` and the `auto-ci` CLI to your `PATH`, and launches it:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alexfilatov/auto-ci/main/install.sh | bash
 ```
 
-(Requires Xcode/Swift to build, since there's no prebuilt binary yet. The installer checks for it and tells you what's missing.)
+The installer strips the Gatekeeper quarantine flag so the (currently unsigned) app opens without a warning. If no prebuilt release is available, it automatically falls back to building from source (which then needs Xcode/Swift).
 
-Already cloned? Just run the in-repo installer instead:
-
-```bash
-./scripts/install.sh
-```
-
-Then run `auto-ci doctor` to confirm `gh`/`claude` are ready, and `auto-ci init` inside any repo you want watched. (See [Build](#build) below if you'd rather build the pieces separately.)
+Then run `auto-ci doctor` to confirm `gh`/`claude` are ready, and `auto-ci init` inside any repo you want watched.
 
 ## Requirements
 

@@ -38,7 +38,7 @@ install_prebuilt() {
     step "Installing the menubar app"
     ditto -x -k "$tmp/AutoCI.app.zip" "$tmp/extracted"
     # Strip the Gatekeeper quarantine flag so the unsigned app opens cleanly.
-    xattr -dr com.apple.quarantine "$tmp/extracted/AutoCI.app" 2>/dev/null || true
+    /usr/bin/xattr -dr com.apple.quarantine "$tmp/extracted/AutoCI.app" 2>/dev/null || true
     rm -rf /Applications/AutoCI.app
     cp -R "$tmp/extracted/AutoCI.app" /Applications/AutoCI.app
     ok "AutoCI.app → /Applications"
@@ -47,7 +47,7 @@ install_prebuilt() {
     local dir; dir="$(cli_dir)"
     cp "$tmp/auto-ci" "$dir/auto-ci"
     chmod +x "$dir/auto-ci"
-    xattr -dr com.apple.quarantine "$dir/auto-ci" 2>/dev/null || true
+    /usr/bin/xattr -dr com.apple.quarantine "$dir/auto-ci" 2>/dev/null || true
     ok "auto-ci → $dir"
     case ":$PATH:" in
         *":$dir:"*) ;;
