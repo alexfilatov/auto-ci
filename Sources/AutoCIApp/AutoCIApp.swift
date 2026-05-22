@@ -128,7 +128,11 @@ final class AppController: ObservableObject, Notifier {
     @Published var lastErrorURL: String?
 
     /// Worst state across all projects; drives the menubar glyph color + summary bar.
-    var state: CIState { worstState(projectStates.values.map { $0.state }) }
+    /// Setup issues (missing gh/claude) force attention so the menubar signals it.
+    var state: CIState {
+        if !setupIssues.isEmpty { return .attention }
+        return worstState(projectStates.values.map { $0.state })
+    }
 
     /// The live state for a project (idle default if unseen).
     func liveState(_ project: String) -> ProjectLiveState { projectStates[project] ?? ProjectLiveState() }
@@ -438,7 +442,7 @@ final class AppController: ObservableObject, Notifier {
         }
 
         let entry = HistoryEntry(project: project, branch: branch, kind: kind,
-                                 detail: detail, runURL: currentRunURL, timestamp: Date())
+                                 detail: detail, runURL: liveState(project).runURL, timestamp: Date())
         history.record(entry)
         groupedHistory = history.grouped()
 
