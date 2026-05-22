@@ -42,4 +42,37 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(restored, original)
         XCTAssertFalse(FileManager.default.fileExists(atPath: hookPath + ".auto-ci-orig"))
     }
+
+    func testUninstallPreservesUserEditsToManagedHook() throws {
+        let installer = HookInstaller()
+        try installer.install(repoPath: repo.path, socketPath: "/tmp/sock", project: "demo")
+        // User edits the managed hook (e.g. adds their own step), not realizing it's managed.
+        var managed = try String(contentsOfFile: hookPath, encoding: .utf8)
+        managed += "\necho 'my custom pre-push step'\n"
+        try managed.write(toFile: hookPath, atomically: true, encoding: .utf8)
+
+        let notes = try installer.uninstall(repoPath: repo.path)
+        // Their edited hook must be preserved in a saved copy, not silently lost.
+        let saved = try FileManager.default.contentsOfDirectory(atPath: repo.path + "/.git/hooks")
+            .filter { $0.contains(".auto-ci-modified.") }
+        XCTAssertEqual(saved.count, 1)
+        let savedContent = try String(contentsOfFile: repo.path + "/.git/hooks/" + saved[0], encoding: .utf8)
+        XCTAssertTrue(savedContent.contains("my custom pre-push step"))
+        XCTAssertFalse(notes.isEmpty)
+    }
+
+    func testUninstallDoesNotClobberUserReplacedHook() throws {
+        // Existing hook, then auto-ci installs (chaining), then the user REPLACES pre-push entirely.
+        let original = "#!/bin/sh\necho existing\n"
+        try original.write(toFile: hookPath, atomically: true, encoding: .utf8)
+        let installer = HookInstaller()
+        try installer.install(repoPath: repo.path, socketPath: "/tmp/sock", project: "demo")
+        let userHook = "#!/bin/sh\necho totally new user hook\n"
+        try userHook.write(toFile: hookPath, atomically: true, encoding: .utf8)
+
+        try installer.uninstall(repoPath: repo.path)
+        // The user's new hook must remain — not be overwritten by the old backup.
+        let after = try String(contentsOfFile: hookPath, encoding: .utf8)
+        XCTAssertEqual(after, userHook)
+    }
 }

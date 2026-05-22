@@ -43,14 +43,18 @@ public struct CLICommand: Sendable {
             return names.isEmpty ? "No projects registered." : names.joined(separator: "\n")
         case "uninstall":
             let name = (cwd as NSString).lastPathComponent
-            try hookInstaller.uninstall(repoPath: cwd)
+            let notes = try hookInstaller.uninstall(repoPath: cwd)
             try store.remove(named: name)
             let purge = args.dropFirst().contains("--purge")
+            var message: String
             if purge {
                 purgeProjectData(named: name)
-                return "Uninstalled hook, unregistered \(name), and purged its clone, fix memory, and history."
+                message = "Uninstalled hook, unregistered \(name), and purged its clone, fix memory, and history."
+            } else {
+                message = "Uninstalled hook and removed \(name)."
             }
-            return "Uninstalled hook and removed \(name)."
+            if !notes.isEmpty { message += "\n" + notes.joined(separator: "\n") }
+            return message
         case "doctor":
             return doctor()
         case "fix":
