@@ -28,9 +28,12 @@ struct ProjectDetailView: View {
 
     private var header: some View {
         HStack(spacing: 9) {
-            Button(action: onBack) { Image(systemName: "chevron.left") }
-                .buttonStyle(.plain).frame(width: 24, height: 24)
-                .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.06)))
+            Button(action: onBack) {
+                Image(systemName: "chevron.left").frame(width: 24, height: 24)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(ACColor.fillSecondary))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
             Circle().fill(live.state.color).frame(width: 9, height: 9)
             Text(project).font(.system(size: 14, weight: .semibold))
             Spacer()
@@ -55,12 +58,16 @@ struct ProjectDetailView: View {
             if let urlString = live.runURL, let url = URL(string: urlString) {
                 Link(destination: url) { actionLabel("View run ↗") }
             }
-            if controller.isHeld(project) {
-                Button { controller.releaseActiveBranch(project) } label: { actionLabel("Release") }
-                    .buttonStyle(.plain)
-            } else {
-                Button { controller.holdActiveBranch(project) } label: { actionLabel("Hold") }
-                    .buttonStyle(.plain).disabled(controller.activeBranch(project) == nil)
+            // Hold/Release only make sense once a branch is known — hide otherwise
+            // (a disabled, dimmed button reads as broken).
+            if controller.activeBranch(project) != nil {
+                if controller.isHeld(project) {
+                    Button { controller.releaseActiveBranch(project) } label: { actionLabel("Release") }
+                        .buttonStyle(.plain)
+                } else {
+                    Button { controller.holdActiveBranch(project) } label: { actionLabel("Hold") }
+                        .buttonStyle(.plain)
+                }
             }
             Button {
                 if let c = config { controller.stopWatching(c); onBack() }
@@ -71,11 +78,14 @@ struct ProjectDetailView: View {
     }
 
     private func actionLabel(_ text: String, danger: Bool = false) -> some View {
-        Text(text).font(.system(size: 11)).frame(maxWidth: .infinity)
+        Text(text).font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity)
             .padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: 8)
-                .fill(danger ? Color.red.opacity(0.16) : .white.opacity(0.07)))
-            .foregroundStyle(danger ? Color.red : .primary)
+                .fill(danger ? ACColor.destructiveFill : ACColor.fillTertiary))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .stroke(danger ? ACColor.stateAttention.opacity(0.25) : ACColor.strokeSubtle, lineWidth: 0.5))
+            .foregroundStyle(danger ? ACColor.destructiveText : ACColor.textPrimary)
+            .contentShape(Rectangle())
     }
 
     @ViewBuilder private var chips: some View {
@@ -90,16 +100,16 @@ struct ProjectDetailView: View {
     }
 
     private func chip(_ text: String) -> some View {
-        Text(text).font(.system(size: 10)).foregroundStyle(.secondary)
+        Text(text).font(.system(size: 10)).foregroundStyle(ACColor.textSecondary)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Capsule().fill(.white.opacity(0.06)))
+            .background(Capsule().fill(ACColor.fillQuaternary))
     }
 
     private var historyList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("RECENT").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                    Text("RECENT").font(.system(size: 10, weight: .semibold)).foregroundStyle(ACColor.textTertiary)
                     Spacer()
                     if !entries.isEmpty {
                         Button("Clear") { controller.clearHistory(project: project) }
@@ -120,9 +130,11 @@ struct ProjectDetailView: View {
     private func historyRow(_ e: HistoryEntry) -> some View {
         HStack(alignment: .top, spacing: 9) {
             Text(historyMarker(forKind: e.kind)).font(.system(size: 12)).frame(width: 13)
+                .foregroundStyle(markerColor(e.kind))
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(e.branch.isEmpty ? "—" : e.branch) — \(e.detail)").font(.system(size: 11.5)).lineLimit(2)
-                Text(ProjectTile.rel(e.timestamp)).font(.system(size: 10.5)).foregroundStyle(.secondary)
+                Text("\(e.branch.isEmpty ? "—" : e.branch) — \(e.detail)").font(.system(size: 11.5))
+                    .foregroundStyle(ACColor.textPrimary).lineLimit(2)
+                Text(ProjectTile.rel(e.timestamp)).font(.system(size: 10.5)).foregroundStyle(ACColor.textSecondary)
             }
             Spacer()
             if let urlString = e.runURL, let url = URL(string: urlString) {
@@ -130,6 +142,14 @@ struct ProjectDetailView: View {
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
+    }
+
+    private func markerColor(_ kind: String) -> Color {
+        switch kind {
+        case "fixed": return ACColor.stateFixed
+        case "stuck", "gaveUp", "error": return ACColor.stateAttention
+        default: return ACColor.textSecondary
+        }
     }
 
     private var stateWord: String {

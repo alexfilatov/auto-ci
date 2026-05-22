@@ -34,10 +34,12 @@ struct ProjectGridView: View {
                 let live = controller.liveState(name)
                 let last = controller.groupedHistory.first(where: { $0.project == name })?.entries.first
                 if live.state == .fixing {
-                    FixingTile(name: name, live: live).onTapGesture { onSelect(name) }
+                    FixingTile(name: name, live: live)
+                        .contentShape(Rectangle()).onTapGesture { onSelect(name) }
                         .gridCellColumns(2)
                 } else {
-                    ProjectTile(name: name, live: live, lastEntry: last).onTapGesture { onSelect(name) }
+                    ProjectTile(name: name, live: live, lastEntry: last)
+                        .contentShape(Rectangle()).onTapGesture { onSelect(name) }
                 }
             }
         }
@@ -76,12 +78,13 @@ struct ProjectTile: View {
                 Circle().fill(live.state.color).frame(width: 8, height: 8)
                 Text(name).font(.system(size: 12.5, weight: .semibold)).lineLimit(1)
             }
-            Text(stateLabel).font(.system(size: 11)).foregroundStyle(.primary).lineLimit(1)
-            Text(metaLine).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+            Text(stateLabel).font(.system(size: 11)).foregroundStyle(ACColor.textPrimary).lineLimit(1)
+            Text(metaLine).font(.system(size: 10.5)).foregroundStyle(ACColor.textSecondary).lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 11).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 11).fill(.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 11).fill(ACColor.fillQuaternary))
+        .overlay(RoundedRectangle(cornerRadius: 11).stroke(ACColor.strokeSubtle, lineWidth: 0.5))
     }
 
     private var stateLabel: String {
@@ -114,18 +117,19 @@ struct FixingTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
-                Circle().fill(Color.orange).frame(width: 8, height: 8)
+                Circle().fill(ACColor.stateFixing).frame(width: 8, height: 8)
                 Text(name).font(.system(size: 12.5, weight: .semibold)).lineLimit(1)
                 Spacer()
                 if let a = live.attempt {
-                    Text("attempt \(a.current) of \(a.max)").font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    Text("attempt \(a.current) of \(a.max)").font(.system(size: 10.5)).foregroundStyle(ACColor.textSecondary)
                 }
             }
-            Text(live.statusLine).font(.system(size: 11)).foregroundStyle(.primary).lineLimit(1)
-            ProgressView().progressViewStyle(.linear).tint(.orange)
+            Text(live.statusLine).font(.system(size: 11)).foregroundStyle(ACColor.textPrimary).lineLimit(1)
+            ProgressView().progressViewStyle(.linear).tint(ACColor.stateFixing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 11).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 11).fill(.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 11).fill(ACColor.fillTertiary))
+        .overlay(RoundedRectangle(cornerRadius: 11).stroke(ACColor.stateFixing.opacity(0.35), lineWidth: 0.5))
     }
 }
