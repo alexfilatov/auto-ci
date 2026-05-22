@@ -43,3 +43,13 @@ public struct ProjectLiveState: Equatable, Sendable {
         self.runURL = runURL; self.branch = branch; self.attempt = attempt
     }
 }
+
+/// Maps a HistoryEntry.kind string to its one-glyph marker for the detail history list.
+public func historyMarker(forKind kind: String) -> String {
+    switch kind {
+    case "fixed": return "✓"
+    case "deferred": return "⏸"
+    case "stuck", "gaveUp", "error": return "⚠"
+    default: return "•"
+    }
+}

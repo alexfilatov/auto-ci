@@ -24,4 +24,13 @@ final class PanelModelTests: XCTestCase {
         XCTAssertEqual(Attempt(current: 2, max: 3), Attempt(current: 2, max: 3))
         XCTAssertNotEqual(Attempt(current: 1, max: 3), Attempt(current: 2, max: 3))
     }
+
+    func testHistoryMarkerMapping() {
+        XCTAssertEqual(historyMarker(forKind: "fixed"), "✓")
+        XCTAssertEqual(historyMarker(forKind: "deferred"), "⏸")
+        XCTAssertEqual(historyMarker(forKind: "stuck"), "⚠")
+        XCTAssertEqual(historyMarker(forKind: "gaveUp"), "⚠")
+        XCTAssertEqual(historyMarker(forKind: "error"), "⚠")
+        XCTAssertEqual(historyMarker(forKind: "anything-else"), "•")
+    }
 }
