@@ -138,6 +138,9 @@ final class AppController: ObservableObject, Notifier {
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
+    private let leases = LeaseStore(root: ConfigStore.defaultRoot)
+    /// Default UI hold duration (mirrors the CLI default).
+    private static let holdMinutes = 30
     private var listener: PushListener?
     private var configTimer: Timer?
 
@@ -331,6 +334,29 @@ final class AppController: ObservableObject, Notifier {
     func clearHistory() {
         history.clear()
         groupedHistory = []
+    }
+
+    /// The branch a Hold/Release acts on for a project: its active/most-recent branch.
+    func activeBranch(_ project: String) -> String? { liveState(project).branch }
+
+    /// True if the project's active branch is currently held.
+    func isHeld(_ project: String) -> Bool {
+        guard let branch = activeBranch(project) else { return false }
+        return leases.isHeld(project: project, branch: branch)
+    }
+
+    /// Claim the project's active branch so auto-ci stands down. No-op if no branch is known.
+    func holdActiveBranch(_ project: String) {
+        guard let branch = activeBranch(project) else { return }
+        leases.hold(project: project, branch: branch, minutes: Self.holdMinutes)
+        objectWillChange.send()
+    }
+
+    /// Release the hold on the project's active branch.
+    func releaseActiveBranch(_ project: String) {
+        guard let branch = activeBranch(project) else { return }
+        leases.release(project: project, branch: branch)
+        objectWillChange.send()
     }
 
     /// Stop watching a project: remove its pre-push hook and unregister it (no CLI needed).
