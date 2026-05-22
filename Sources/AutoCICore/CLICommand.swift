@@ -6,16 +6,21 @@ public struct CLICommand: Sendable {
     private let runner: CommandRunner
     private let hookInstaller: HookInstaller
     private let socketPath: String
+    private let root: URL
     private let fixRunner: (@Sendable (ProjectConfig, _ sha: String, _ branch: String) -> String)?
     public init(store: ConfigStore, runner: CommandRunner, hookInstaller: HookInstaller, socketPath: String,
+                root: URL = ConfigStore.defaultRoot,
                 fixRunner: (@Sendable (ProjectConfig, _ sha: String, _ branch: String) -> String)? = nil) {
         self.store = store; self.runner = runner; self.hookInstaller = hookInstaller; self.socketPath = socketPath
+        self.root = root
         self.fixRunner = fixRunner
     }
 
     public func run(_ args: [String], cwd: String) throws -> String {
-        guard let cmd = args.first else { return usage() }
+        guard let cmd = args.first else { return helpText() }
         switch cmd {
+        case "help", "-h", "--help":
+            return helpText()
         case "init":
             let name = (cwd as NSString).lastPathComponent
             let remote = try runner.run("git", ["remote", "get-url", "origin"], cwd: cwd, stdin: nil, env: nil)
@@ -40,13 +45,18 @@ public struct CLICommand: Sendable {
             let name = (cwd as NSString).lastPathComponent
             try hookInstaller.uninstall(repoPath: cwd)
             try store.remove(named: name)
+            let purge = args.dropFirst().contains("--purge")
+            if purge {
+                purgeProjectData(named: name)
+                return "Uninstalled hook, unregistered \(name), and purged its clone, fix memory, and history."
+            }
             return "Uninstalled hook and removed \(name)."
         case "doctor":
             return doctor()
         case "fix":
             return try runFix(args: Array(args.dropFirst()), cwd: cwd)
         default:
-            return usage()
+            return "Unknown command: \(cmd)\n\n" + helpText()
         }
     }
 
@@ -107,6 +117,14 @@ public struct CLICommand: Sendable {
         }
     }
 
+    /// Delete the per-project clone, fix memory, and history entries.
+    private func purgeProjectData(named name: String) {
+        let fm = FileManager.default
+        try? fm.removeItem(at: root.appendingPathComponent("repos").appendingPathComponent(name))
+        try? fm.removeItem(at: root.appendingPathComponent("projects").appendingPathComponent(name))
+        HistoryStore(root: root).removeProject(name)
+    }
+
     private func doctor() -> String {
         let statuses = DependencyChecker(runner: runner).check()
         var lines: [String] = []
@@ -125,7 +143,30 @@ public struct CLICommand: Sendable {
         return lines.joined(separator: "\n")
     }
 
-    private func usage() -> String {
-        "Usage: auto-ci <init|list|uninstall|doctor|fix [--sha <sha>] [--branch <branch>]>"
+    private func helpText() -> String {
+        """
+        auto-ci — automatically fix failing GitHub Actions CI with Claude Code
+
+        USAGE
+          auto-ci <command> [options]
+
+        COMMANDS
+          init        Register the current repo and install the pre-push hook
+          uninstall   Remove the hook and unregister the current repo
+          list        List all registered projects
+          fix         Run the fix pipeline once for the current commit
+                        --sha <sha>        fix a specific commit instead of HEAD
+                        --branch <branch>  treat the fix as targeting this branch
+          doctor      Check that git, gh, and claude are installed and authenticated
+          help        Show this help
+
+        EXAMPLES
+          auto-ci doctor
+          cd my-repo && auto-ci init
+          auto-ci fix --branch feature-x
+
+        The menubar app watches your pushes automatically; `fix` is the manual trigger.
+        Docs: https://github.com/alexfilatov/auto-ci
+        """
     }
 }

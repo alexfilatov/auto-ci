@@ -6,7 +6,7 @@ let root = ConfigStore.defaultRoot
 let store = ConfigStore(root: root)
 let socketPath = root.appendingPathComponent("daemon.sock").path
 let cli = CLICommand(store: store, runner: ProcessCommandRunner(),
-                     hookInstaller: HookInstaller(), socketPath: socketPath)
+                     hookInstaller: HookInstaller(), socketPath: socketPath, root: root)
 do {
     let out = try cli.run(Array(CommandLine.arguments.dropFirst()),
                           cwd: FileManager.default.currentDirectoryPath)

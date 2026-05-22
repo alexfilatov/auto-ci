@@ -61,12 +61,19 @@ struct AutoCIIcon: View {
 extension AutoCIIcon {
     /// Rasterize the glyph to an NSImage for use as a MenuBarExtra label.
     /// SwiftUI does not reliably render arbitrary drawing views directly in the
-    /// status bar, so we render to a (non-template, so color shows) NSImage.
-    @MainActor func rendered() -> NSImage {
+    /// status bar, so we render to an NSImage.
+    ///
+    /// `template == true` produces a monochrome template image that macOS
+    /// auto-tints to match the menu bar (always visible on light AND dark bars).
+    /// Use it for the idle state. For active states pass `template == false` with
+    /// a saturated color that contrasts on both appearances.
+    @MainActor func rendered(template: Bool) -> NSImage {
         let renderer = ImageRenderer(content: self)
-        renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+        renderer.scale = max(NSScreen.main?.backingScaleFactor ?? 2, 2)
         let image = renderer.nsImage ?? NSImage(size: NSSize(width: pointSize, height: pointSize))
-        image.isTemplate = false
+        // Force the logical size so the status bar never renders it at 0 / oversized.
+        image.size = NSSize(width: pointSize, height: pointSize)
+        image.isTemplate = template
         return image
     }
 }

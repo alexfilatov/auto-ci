@@ -22,6 +22,46 @@ final class CLICommandTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent(".git/hooks/pre-push").path))
     }
 
+    func testHelpListsCommands() throws {
+        let store = ConfigStore(root: root.appendingPathComponent("cfg"))
+        let cli = CLICommand(store: store, runner: FakeCommandRunner(),
+                             hookInstaller: HookInstaller(), socketPath: "/tmp/sock")
+        for invocation in [["help"], ["--help"], ["-h"], []] {
+            let out = try cli.run(invocation, cwd: root.path)
+            XCTAssertTrue(out.contains("USAGE"))
+            XCTAssertTrue(out.contains("init"))
+            XCTAssertTrue(out.contains("doctor"))
+            XCTAssertTrue(out.contains("fix"))
+        }
+    }
+
+    func testUninstallPurgeRemovesCloneMemoryAndHistory() throws {
+        let fm = FileManager.default
+        let store = ConfigStore(root: root.appendingPathComponent("cfg"))
+        try store.upsert(ProjectConfig(name: "demo", path: root.path, remote: "git@github.com:x/y.git"))
+        // Seed clone, memory, and history for "demo".
+        let cloneDir = root.appendingPathComponent("repos/demo")
+        let memDir = root.appendingPathComponent("projects/demo")
+        try fm.createDirectory(at: cloneDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: memDir, withIntermediateDirectories: true)
+        let history = HistoryStore(root: root)
+        history.record(HistoryEntry(project: "demo", branch: "main", kind: "fixed", detail: "x",
+                                    runURL: nil, timestamp: Date()))
+
+        // cwd basename must be "demo" so uninstall targets it.
+        let repo = root.appendingPathComponent("demo")
+        try fm.createDirectory(at: repo.appendingPathComponent(".git/hooks"), withIntermediateDirectories: true)
+        try store.upsert(ProjectConfig(name: "demo", path: repo.path, remote: "git@github.com:x/y.git"))
+
+        let cli = CLICommand(store: store, runner: FakeCommandRunner(),
+                             hookInstaller: HookInstaller(), socketPath: "/tmp/sock", root: root)
+        let out = try cli.run(["uninstall", "--purge"], cwd: repo.path)
+        XCTAssertTrue(out.contains("purged"))
+        XCTAssertFalse(fm.fileExists(atPath: cloneDir.path))
+        XCTAssertFalse(fm.fileExists(atPath: memDir.path))
+        XCTAssertTrue(HistoryStore(root: root).all().isEmpty)
+    }
+
     func testFixResolvesProjectShaAndBranchAndInvokesPipeline() throws {
         let store = ConfigStore(root: root.appendingPathComponent("cfg"))
         try store.upsert(ProjectConfig(name: "demo", path: root.path, remote: "git@github.com:x/y.git"))

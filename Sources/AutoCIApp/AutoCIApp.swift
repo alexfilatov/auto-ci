@@ -47,6 +47,18 @@ struct AutoCIApp: App {
 
             Divider()
 
+            Menu("Projects") {
+                if controller.projects.isEmpty {
+                    Text("None — run `auto-ci init` in a repo").foregroundStyle(.secondary)
+                } else {
+                    ForEach(controller.projects, id: \.name) { project in
+                        Menu(project.name) {
+                            Button("Stop watching") { controller.stopWatching(project) }
+                        }
+                    }
+                }
+            }
+
             Menu("Recent") {
                 if controller.groupedHistory.isEmpty {
                     Text("No fixes yet").foregroundStyle(.secondary)
@@ -70,7 +82,8 @@ struct AutoCIApp: App {
             Button("About") { controller.showAbout() }
             Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
         } label: {
-            Image(nsImage: AutoCIIcon(color: controller.state.color).rendered())
+            Image(nsImage: AutoCIIcon(color: controller.state.color)
+                .rendered(template: controller.state == .idle))
         }
         .menuBarExtraStyle(.menu)
     }
@@ -92,7 +105,7 @@ enum AppState: Equatable {
     case idle, watching, fixing, fixed, attention
     var color: Color {
         switch self {
-        case .idle: return .primary
+        case .idle: return .black   // rendered as a template image → auto-tinted by the menu bar
         case .watching: return .blue
         case .fixing: return .orange
         case .fixed: return .green
@@ -121,6 +134,7 @@ final class AppController: ObservableObject, Notifier {
     @Published var state: AppState = .idle
     @Published var currentRunURL: String?
     @Published var launchAtLogin: Bool = false
+    @Published var projects: [ProjectConfig] = []
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
@@ -129,6 +143,7 @@ final class AppController: ObservableObject, Notifier {
     init() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         groupedHistory = history.grouped()
+        projects = store.projects()
         startListener()
         runDependencyPreflight()
         enableLoginItemOnFirstRun()
@@ -246,6 +261,13 @@ final class AppController: ObservableObject, Notifier {
     func clearHistory() {
         history.clear()
         groupedHistory = []
+    }
+
+    /// Stop watching a project: remove its pre-push hook and unregister it (no CLI needed).
+    func stopWatching(_ project: ProjectConfig) {
+        try? HookInstaller().uninstall(repoPath: project.path)
+        try? store.remove(named: project.name)
+        projects = store.projects()
     }
 
     /// Show a native About popup with readable text and a clickable LinkedIn link.
