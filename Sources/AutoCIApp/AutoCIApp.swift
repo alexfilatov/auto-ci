@@ -116,10 +116,13 @@ enum AppState: Equatable {
     /// True while Auto-CI is actively working (dot pulses).
     var isActive: Bool { self == .watching || self == .fixing }
 
-    /// Status-dot color: green while live/healthy, red when it needs you, gray when idle.
+    /// Status-dot color: green watching, orange while fixing (both pulse),
+    /// green when just fixed, red when it needs you, gray when idle.
     var dotColor: Color {
         switch self {
-        case .watching, .fixing, .fixed: return .green
+        case .watching: return .green
+        case .fixing: return .orange
+        case .fixed: return .green
         case .attention: return .red
         case .idle: return .secondary
         }
