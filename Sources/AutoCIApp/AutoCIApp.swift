@@ -212,7 +212,7 @@ final class AppController: ObservableObject, Notifier {
 
     private func handle(_ event: PushEvent) async {
         guard let config = store.project(named: event.project) else { return }
-        enterWatching(branch: event.branch)
+        enterWatching(project: config.name, branch: event.branch)
 
         let runner = ProcessCommandRunner()
         let workflowYAML = (try? String(contentsOfFile: config.path + "/.github/workflows/ci.yml", encoding: .utf8)) ?? ""
@@ -225,11 +225,12 @@ final class AppController: ObservableObject, Notifier {
         let notifyFn: @Sendable (DaemonEvent) -> Void = { [weak self] ev in
             Task { await self?.notifyAsync(ev) }
         }
+        let eventProject = configCopy.name
         let enterFixingFn: @Sendable (String) -> Void = { [weak self] url in
-            Task { await self?.enterFixing(branch: eventBranch, runURL: url) }
+            Task { await self?.enterFixing(project: eventProject, branch: eventBranch, runURL: url) }
         }
         let enterHoldingFn: @Sendable () -> Void = { [weak self] in
-            Task { await self?.enterHolding(branch: eventBranch, graceSeconds: configCopy.graceSeconds) }
+            Task { await self?.enterHolding(project: eventProject, branch: eventBranch, graceSeconds: configCopy.graceSeconds) }
         }
 
         await Task.detached { @Sendable in
@@ -270,23 +271,23 @@ final class AppController: ObservableObject, Notifier {
         }.value
     }
 
-    private func enterWatching(branch: String) {
+    private func enterWatching(project: String, branch: String) {
         state = .watching
-        statusLine = "Watching \(branch)…"
+        statusLine = "Watching \(project)/\(branch)…"
         currentRunURL = nil
     }
 
     /// Auto-ci has seen a failure but is holding back during the grace period to let a
     /// human or another agent take it first. Stays in the (benign) watching state.
-    private func enterHolding(branch: String, graceSeconds: Int) {
+    private func enterHolding(project: String, branch: String, graceSeconds: Int) {
         state = .watching
-        statusLine = "CI failed on \(branch) — waiting \(graceSeconds)s to see if it's handled…"
+        statusLine = "CI failed on \(project)/\(branch) — waiting \(graceSeconds)s to see if it's handled…"
         currentRunURL = nil
     }
 
-    private func enterFixing(branch: String, runURL: String) {
+    private func enterFixing(project: String, branch: String, runURL: String) {
         state = .fixing
-        statusLine = "Fixing \(branch)…"
+        statusLine = "Fixing \(project)/\(branch)…"
         currentRunURL = runURL.isEmpty ? nil : runURL
     }
 
@@ -346,32 +347,32 @@ final class AppController: ObservableObject, Notifier {
         let project: String, branch: String, kind: String, detail: String
         switch event {
         case .fixed(let p, let br, let det):
-            (title, body) = ("CI fixed ✓", "\(br): \(det)")
+            (title, body) = ("CI fixed ✓", "\(p)/\(br): \(det)")
             state = .fixed
-            statusLine = title
+            statusLine = "CI fixed ✓ — \(p)/\(br)"
             (project, branch, kind, detail) = (p, br, "fixed", det)
             // Drop back to idle shortly so the menubar reflects "watching" again.
             scheduleIdleReset()
         case .stuck(let p, let br):
-            (title, body) = ("CI stuck — needs you", br)
+            (title, body) = ("CI stuck — needs you", "\(p)/\(br)")
             state = .attention
-            statusLine = title
+            statusLine = "CI stuck — needs you: \(p)/\(br)"
             (project, branch, kind, detail) = (p, br, "stuck", "stuck — needs you")
         case .gaveUp(let p, let br):
-            (title, body) = ("CI fix gave up", br)
+            (title, body) = ("CI fix gave up", "\(p)/\(br)")
             state = .attention
-            statusLine = title
+            statusLine = "CI fix gave up: \(p)/\(br)"
             (project, branch, kind, detail) = (p, br, "gaveUp", "fix gave up")
         case .error(let p, let message):
-            (title, body) = ("Auto-CI error", message)
+            (title, body) = ("Auto-CI error", "\(p): \(message)")
             state = .attention
-            statusLine = title
+            statusLine = "Auto-CI error — \(p)"
             (project, branch, kind, detail) = (p, "", "error", message)
         case .deferred(let p, let br, let reason):
             // Deferral is benign — auto-ci stood down because someone else is handling it.
-            (title, body) = ("Auto-CI stood down", "\(br): \(reason)")
+            (title, body) = ("Auto-CI stood down", "\(p)/\(br): \(reason)")
             state = .idle
-            statusLine = "Stood down — \(br) is being fixed elsewhere"
+            statusLine = "Stood down — \(p)/\(br) is being fixed elsewhere"
             (project, branch, kind, detail) = (p, br, "deferred", reason)
         }
 
