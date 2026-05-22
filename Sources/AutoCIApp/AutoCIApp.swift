@@ -2,6 +2,7 @@
 import SwiftUI
 import AutoCICore
 import UserNotifications
+import ServiceManagement
 
 @main
 struct AutoCIApp: App {
@@ -50,6 +51,9 @@ struct AutoCIApp: App {
             }
 
             Divider()
+            Button(controller.launchAtLogin ? "✓ Start at Login" : "Start at Login") {
+                controller.toggleLaunchAtLogin()
+            }
             Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
         } label: {
             AutoCIIcon(color: controller.state.color)
@@ -90,6 +94,7 @@ final class AppController: ObservableObject, Notifier {
     @Published var setupIssues: [String] = []
     @Published var state: AppState = .idle
     @Published var currentRunURL: String?
+    @Published var launchAtLogin: Bool = false
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
@@ -100,6 +105,34 @@ final class AppController: ObservableObject, Notifier {
         groupedHistory = history.grouped()
         startListener()
         runDependencyPreflight()
+        enableLoginItemOnFirstRun()
+        refreshLoginStatus()
+    }
+
+    private func refreshLoginStatus() {
+        launchAtLogin = (SMAppService.mainApp.status == .enabled)
+    }
+
+    /// Register as a login item once, so a fresh install auto-starts at boot.
+    /// After that we respect whatever the user toggles (SMAppService persists it).
+    private func enableLoginItemOnFirstRun() {
+        let key = "didInitialLoginRegister"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        try? SMAppService.mainApp.register()
+        UserDefaults.standard.set(true, forKey: key)
+    }
+
+    func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            statusLine = "Couldn't change login item: \(error.localizedDescription)"
+        }
+        refreshLoginStatus()
     }
 
     /// On launch, surface missing/unauthenticated CLI dependencies as a "setup required" state.
