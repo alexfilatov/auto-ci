@@ -10,11 +10,18 @@ public final class ConfigStore: @unchecked Sendable {
         self.root = root
         self.configURL = root.appendingPathComponent("config.json")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        self.registry = []
+        reload()
+    }
+
+    /// Re-read the registry from disk — picks up changes made by other processes
+    /// (e.g. `auto-ci init` run from the CLI while the menubar app is running).
+    public func reload() {
         if let data = try? Data(contentsOf: configURL),
            let decoded = try? JSONDecoder().decode([ProjectConfig].self, from: data) {
-            self.registry = decoded
+            registry = decoded
         } else {
-            self.registry = []
+            registry = []
         }
     }
 

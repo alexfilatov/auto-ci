@@ -126,12 +126,14 @@ final class AppController: ObservableObject, Notifier {
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
     private var listener: PushListener?
+    private var configWatch: DispatchSourceFileSystemObject?
 
     init() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         groupedHistory = history.grouped()
         projects = store.projects()
         startListener()
+        startConfigWatch()
         runDependencyPreflight()
         enableLoginItemOnFirstRun()
         refreshLoginStatus()
@@ -176,6 +178,27 @@ final class AppController: ObservableObject, Notifier {
             self.statusLine = "Setup required"
             self.setupIssues = problems.map { $0.hint }
         }
+    }
+
+    /// Watch ~/.auto-ci so the menu reflects changes made by the CLI (e.g. `auto-ci init`
+    /// in another repo) without needing an app restart.
+    private func startConfigWatch() {
+        let fd = open(ConfigStore.defaultRoot.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let src = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: [.write, .delete, .rename, .extend], queue: .main)
+        src.setEventHandler { [weak self] in
+            Task { @MainActor in self?.reloadFromDisk() }
+        }
+        src.setCancelHandler { close(fd) }
+        src.resume()
+        configWatch = src
+    }
+
+    private func reloadFromDisk() {
+        store.reload()
+        projects = store.projects()
+        groupedHistory = history.grouped()
     }
 
     private func startListener() {
@@ -280,11 +303,13 @@ final class AppController: ObservableObject, Notifier {
     /// Stop watching a project: remove its pre-push hook and unregister it (no CLI needed).
     func stopWatching(_ project: ProjectConfig) {
         _ = try? HookInstaller().uninstall(repoPath: project.path)
+        store.reload()
         try? store.remove(named: project.name)
         projects = store.projects()
     }
 
     func updateProject(_ config: ProjectConfig) {
+        store.reload()
         try? store.upsert(config)
         projects = store.projects()
     }
