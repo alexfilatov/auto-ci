@@ -16,6 +16,10 @@ struct AutoCIApp: App {
                 Link("View workflow run ↗", destination: link)
             }
 
+            if controller.lastError != nil {
+                Button("Show error details…") { controller.showErrorDetails() }
+            }
+
             if !controller.setupIssues.isEmpty {
                 Divider()
                 Text("⚠ Setup required")
@@ -122,6 +126,8 @@ final class AppController: ObservableObject, Notifier {
     @Published var currentRunURL: String?
     @Published var launchAtLogin: Bool = false
     @Published var projects: [ProjectConfig] = []
+    @Published var lastError: String?
+    @Published var lastErrorURL: String?
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
@@ -275,6 +281,26 @@ final class AppController: ObservableObject, Notifier {
         state = .watching
         statusLine = "Watching \(project)/\(branch)…"
         currentRunURL = nil
+        lastError = nil
+        lastErrorURL = nil
+    }
+
+    /// Show the last error in a readable popup, with a button to open the workflow run if known.
+    func showErrorDetails() {
+        guard let err = lastError else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Auto-CI error"
+        alert.informativeText = err
+        let hasURL = lastErrorURL != nil
+        if hasURL { alert.addButton(withTitle: "Open workflow run") }
+        alert.addButton(withTitle: "Close")
+        let response = alert.runModal()
+        if hasURL, response == .alertFirstButtonReturn,
+           let urlString = lastErrorURL, let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     /// Auto-ci has seen a failure but is holding back during the grace period to let a
@@ -367,6 +393,8 @@ final class AppController: ObservableObject, Notifier {
             (title, body) = ("Auto-CI error", "\(p): \(message)")
             state = .attention
             statusLine = "Auto-CI error — \(p)"
+            lastError = message
+            lastErrorURL = currentRunURL
             (project, branch, kind, detail) = (p, "", "error", message)
         case .deferred(let p, let br, let reason):
             // Deferral is benign — auto-ci stood down because someone else is handling it.
