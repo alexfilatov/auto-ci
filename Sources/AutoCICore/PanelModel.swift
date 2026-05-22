@@ -21,3 +21,25 @@ public enum CIState: String, Codable, Equatable, Sendable, CaseIterable {
 public func worstState(_ states: [CIState]) -> CIState {
     states.max(by: { $0.severity < $1.severity }) ?? .idle
 }
+
+/// Retry progress for a fixing project: e.g. attempt 2 of 3.
+public struct Attempt: Equatable, Sendable {
+    public let current: Int
+    public let max: Int
+    public init(current: Int, max: Int) { self.current = current; self.max = max }
+}
+
+/// Everything the panel needs to render one project's live status.
+public struct ProjectLiveState: Equatable, Sendable {
+    public var state: CIState
+    public var statusLine: String
+    public var runURL: String?
+    public var branch: String?
+    public var attempt: Attempt?
+
+    public init(state: CIState = .idle, statusLine: String = "",
+                runURL: String? = nil, branch: String? = nil, attempt: Attempt? = nil) {
+        self.state = state; self.statusLine = statusLine
+        self.runURL = runURL; self.branch = branch; self.attempt = attempt
+    }
+}
