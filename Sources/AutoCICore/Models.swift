@@ -58,8 +58,10 @@ public struct WorkflowRun: Codable, Equatable, Sendable {
     public let name: String
     public let status: RunStatus
     public let headSha: String
-    public init(id: Int, name: String, status: RunStatus, headSha: String) {
-        self.id = id; self.name = name; self.status = status; self.headSha = headSha
+    /// HTML URL of the run on GitHub (e.g. https://github.com/owner/repo/actions/runs/<id>).
+    public let url: String
+    public init(id: Int, name: String, status: RunStatus, headSha: String, url: String = "") {
+        self.id = id; self.name = name; self.status = status; self.headSha = headSha; self.url = url
     }
 }
 

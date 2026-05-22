@@ -5,8 +5,8 @@ import XCTest
 final class GitHubClientTests: XCTestCase {
     func testRunsForShaParsesJSON() throws {
         let json = """
-        [{"databaseId":111,"name":"CI","status":"completed","conclusion":"failure","headSha":"abc"},
-         {"databaseId":222,"name":"Lint","status":"in_progress","conclusion":"","headSha":"abc"}]
+        [{"databaseId":111,"name":"CI","status":"completed","conclusion":"failure","headSha":"abc","url":"https://github.com/x/y/actions/runs/111"},
+         {"databaseId":222,"name":"Lint","status":"in_progress","conclusion":"","headSha":"abc","url":"https://github.com/x/y/actions/runs/222"}]
         """
         let fake = FakeCommandRunner()
         fake.stub(command: "gh", args: ["run", "list"], stdout: json)
@@ -16,6 +16,18 @@ final class GitHubClientTests: XCTestCase {
         XCTAssertEqual(runs[0].status, .failed)
         XCTAssertEqual(runs[1].status, .inProgress)
         XCTAssertEqual(runs[0].id, 111)
+        XCTAssertEqual(runs[0].url, "https://github.com/x/y/actions/runs/111")
+    }
+
+    func testRunsParseToleratesMissingURL() throws {
+        let json = """
+        [{"databaseId":111,"name":"CI","status":"completed","conclusion":"failure","headSha":"abc"}]
+        """
+        let fake = FakeCommandRunner()
+        fake.stub(command: "gh", args: ["run", "list"], stdout: json)
+        let gh = GitHubClient(runner: fake)
+        let runs = try gh.runs(forSha: "abc", cwd: "/repo")
+        XCTAssertEqual(runs[0].url, "")
     }
 
     func testFailedJobLogReturnsStdout() throws {

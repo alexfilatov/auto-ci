@@ -13,18 +13,18 @@ public struct GitHubClient: Sendable {
 
     private struct RawRun: Decodable {
         let databaseId: Int; let name: String; let status: String
-        let conclusion: String?; let headSha: String
+        let conclusion: String?; let headSha: String; let url: String?
     }
 
     public func runs(forSha sha: String, cwd: String) throws -> [WorkflowRun] {
         let out = try gh(["run", "list", "--commit", sha,
-                          "--json", "databaseId,name,status,conclusion,headSha",
+                          "--json", "databaseId,name,status,conclusion,headSha,url",
                           "--limit", "20"], cwd: cwd)
         let raws = try JSONDecoder().decode([RawRun].self, from: Data(out.utf8))
         return raws.map { raw in
             WorkflowRun(id: raw.databaseId, name: raw.name,
                         status: mapStatus(status: raw.status, conclusion: raw.conclusion),
-                        headSha: raw.headSha)
+                        headSha: raw.headSha, url: raw.url ?? "")
         }
     }
 
