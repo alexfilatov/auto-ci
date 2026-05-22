@@ -12,7 +12,7 @@ public struct ProjectConfig: Codable, Equatable, Sendable {
     public static let defaultTestPathPatterns = ["tests/", "_test", ".test.", "spec", "/test"]
 
     public init(name: String, path: String, remote: String,
-                protectedBranches: [String] = ["main", "master"],
+                protectedBranches: [String] = ["main"],
                 protectTests: Bool = true,
                 testPathPatterns: [String] = ProjectConfig.defaultTestPathPatterns) {
         self.name = name; self.path = path; self.remote = remote
