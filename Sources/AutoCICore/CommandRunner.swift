@@ -23,7 +23,18 @@ public struct ProcessCommandRunner: CommandRunner {
             process.arguments = [command] + args
         }
         if let cwd { process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
-        if let env { process.environment = ProcessInfo.processInfo.environment.merging(env) { _, new in new } }
+        // A GUI/menu-bar app launched by LaunchServices or a login item inherits a
+        // stripped PATH (often just /usr/bin:/bin), so tools like gh (/opt/homebrew/bin)
+        // and claude (~/.local/bin) won't be found. Augment PATH with the common
+        // locations so subprocesses resolve regardless of how the app was launched.
+        var environment = ProcessInfo.processInfo.environment
+        let home = environment["HOME"] ?? NSHomeDirectory()
+        let toolDirs = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/.local/bin",
+                        "\(home)/.bun/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        let existingPath = environment["PATH"].map { [$0] } ?? []
+        environment["PATH"] = (toolDirs + existingPath).joined(separator: ":")
+        if let env { environment.merge(env) { _, new in new } }
+        process.environment = environment
         let out = Pipe(); let err = Pipe(); let inp = Pipe()
         process.standardOutput = out; process.standardError = err; process.standardInput = inp
         try process.run()
