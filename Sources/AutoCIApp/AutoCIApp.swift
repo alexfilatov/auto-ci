@@ -7,7 +7,7 @@ import UserNotifications
 struct AutoCIApp: App {
     @StateObject private var controller = AppController()
     var body: some Scene {
-        MenuBarExtra("Auto-CI", systemImage: controller.iconName) {
+        MenuBarExtra {
             Text(controller.statusLine).font(.headline)
 
             if let url = controller.currentRunURL, let link = URL(string: url) {
@@ -40,7 +40,10 @@ struct AutoCIApp: App {
 
             Divider()
             Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
+        } label: {
+            AutoCIIcon(color: controller.state.color)
         }
+        .menuBarExtraStyle(.menu)
     }
 
     @ViewBuilder
@@ -55,21 +58,26 @@ struct AutoCIApp: App {
     }
 }
 
+/// The single Auto-CI glyph stays the same in every state — only the color changes.
+enum AppState: Equatable {
+    case idle, watching, fixing, fixed, attention
+    var color: Color {
+        switch self {
+        case .idle: return .secondary
+        case .watching: return .blue
+        case .fixing: return .orange
+        case .fixed: return .green
+        case .attention: return .red
+        }
+    }
+}
+
 @MainActor
 final class AppController: ObservableObject, Notifier {
-    // Icons read clearly at a glance: idle vs actively watching/fixing vs needs-you.
-    enum Icon {
-        static let idle = "wrench.and.screwdriver"
-        static let watching = "eye.fill"
-        static let fixing = "wrench.and.screwdriver.fill"
-        static let fixed = "checkmark.circle.fill"
-        static let attention = "exclamationmark.triangle.fill"
-    }
-
     @Published var statusLine = "Idle — watching for pushes"
     @Published var groupedHistory: [ProjectHistory] = []
     @Published var setupIssues: [String] = []
-    @Published var iconName = Icon.idle
+    @Published var state: AppState = .idle
     @Published var currentRunURL: String?
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
@@ -92,7 +100,7 @@ final class AppController: ObservableObject, Notifier {
             guard let self else { return }
             let problems = statuses.filter { !$0.ok }
             guard !problems.isEmpty else { return }
-            self.iconName = Icon.attention
+            self.state = .attention
             self.statusLine = "Setup required"
             self.setupIssues = problems.map { $0.hint }
         }
@@ -149,19 +157,19 @@ final class AppController: ObservableObject, Notifier {
     }
 
     private func enterWatching(branch: String) {
-        iconName = Icon.watching
+        state = .watching
         statusLine = "Watching \(branch)…"
         currentRunURL = nil
     }
 
     private func enterFixing(branch: String, runURL: String) {
-        iconName = Icon.fixing
+        state = .fixing
         statusLine = "Fixing \(branch)…"
         currentRunURL = runURL.isEmpty ? nil : runURL
     }
 
     private func returnToIdle() {
-        iconName = Icon.idle
+        state = .idle
         statusLine = "Idle — watching for pushes"
     }
 
@@ -175,24 +183,24 @@ final class AppController: ObservableObject, Notifier {
         switch event {
         case .fixed(let p, let br, let det):
             (title, body) = ("CI fixed ✓", "\(br): \(det)")
-            iconName = Icon.fixed
+            state = .fixed
             statusLine = title
             (project, branch, kind, detail) = (p, br, "fixed", det)
             // Drop back to idle shortly so the menubar reflects "watching" again.
             scheduleIdleReset()
         case .stuck(let p, let br):
             (title, body) = ("CI stuck — needs you", br)
-            iconName = Icon.attention
+            state = .attention
             statusLine = title
             (project, branch, kind, detail) = (p, br, "stuck", "stuck — needs you")
         case .gaveUp(let p, let br):
             (title, body) = ("CI fix gave up", br)
-            iconName = Icon.attention
+            state = .attention
             statusLine = title
             (project, branch, kind, detail) = (p, br, "gaveUp", "fix gave up")
         case .error(let p, let message):
             (title, body) = ("Auto-CI error", message)
-            iconName = Icon.attention
+            state = .attention
             statusLine = title
             (project, branch, kind, detail) = (p, "", "error", message)
         }
@@ -213,8 +221,8 @@ final class AppController: ObservableObject, Notifier {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(8))
             guard let self else { return }
-            // Only reset if nothing newer changed the icon to an alert state.
-            if self.iconName == Icon.fixed { self.returnToIdle() }
+            // Only reset if nothing newer changed the state to an alert state.
+            if self.state == .fixed { self.returnToIdle() }
         }
     }
 }
