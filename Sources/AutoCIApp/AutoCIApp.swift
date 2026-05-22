@@ -99,9 +99,9 @@ enum AppState: Equatable {
     /// color inside a native menu (a SwiftUI shape does not).
     var dotEmoji: String {
         switch self {
-        case .watching: return "🟢"
+        case .watching: return "🔵"
         case .fixing: return "🟠"
-        case .fixed: return "✅"
+        case .fixed: return "🟢"
         case .attention: return "🔴"
         case .idle: return "⚪️"
         }
