@@ -4,34 +4,12 @@ import AutoCICore
 import UserNotifications
 import ServiceManagement
 
-/// A small status dot shown left of the status line. Pulses while active.
-struct StatusDot: View {
-    var color: Color
-    var pulsing: Bool
-    @State private var animate = false
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 9, height: 9)
-            .scaleEffect(pulsing && animate ? 1.0 : 0.7)
-            .opacity(pulsing ? (animate ? 1.0 : 0.35) : 1.0)
-            .animation(pulsing ? .easeInOut(duration: 0.75).repeatForever(autoreverses: true) : .default,
-                       value: animate)
-            .onAppear { animate = pulsing }
-            .onChange(of: pulsing) { _, newValue in animate = newValue }
-    }
-}
-
 @main
 struct AutoCIApp: App {
     @StateObject private var controller = AppController()
     var body: some Scene {
         MenuBarExtra {
-            HStack(spacing: 6) {
-                StatusDot(color: controller.state.dotColor, pulsing: controller.state.isActive)
-                Text(controller.statusLine).font(.headline)
-            }
+            Text("\(controller.state.dotEmoji)  \(controller.statusLine)").font(.headline)
 
             if let url = controller.currentRunURL, let link = URL(string: url) {
                 Link("View workflow run ↗", destination: link)
@@ -116,15 +94,15 @@ enum AppState: Equatable {
     /// True while Auto-CI is actively working (dot pulses).
     var isActive: Bool { self == .watching || self == .fixing }
 
-    /// Status-dot color: green watching, orange while fixing (both pulse),
-    /// green when just fixed, red when it needs you, gray when idle.
-    var dotColor: Color {
+    /// A colored status dot for the dropdown header. Emoji renders reliably in
+    /// color inside a native menu (a SwiftUI shape does not).
+    var dotEmoji: String {
         switch self {
-        case .watching: return .green
-        case .fixing: return .orange
-        case .fixed: return .green
-        case .attention: return .red
-        case .idle: return .secondary
+        case .watching: return "🟢"
+        case .fixing: return "🟠"
+        case .fixed: return "✅"
+        case .attention: return "🔴"
+        case .idle: return "⚪️"
         }
     }
 }
