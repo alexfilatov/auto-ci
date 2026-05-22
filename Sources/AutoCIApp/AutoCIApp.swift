@@ -126,7 +126,7 @@ final class AppController: ObservableObject, Notifier {
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
     private let history = HistoryStore(root: ConfigStore.defaultRoot)
     private var listener: PushListener?
-    private var configWatch: DispatchSourceFileSystemObject?
+    private var configTimer: Timer?
 
     init() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -180,25 +180,25 @@ final class AppController: ObservableObject, Notifier {
         }
     }
 
-    /// Watch ~/.auto-ci so the menu reflects changes made by the CLI (e.g. `auto-ci init`
-    /// in another repo) without needing an app restart.
+    /// Poll ~/.auto-ci so the menu reflects changes made by the CLI (e.g. `auto-ci init`
+    /// in another repo) without an app restart. A poll is more reliable than a file
+    /// watcher here because `config.json` is rewritten in place, which a directory
+    /// vnode watch doesn't reliably report.
     private func startConfigWatch() {
-        let fd = open(ConfigStore.defaultRoot.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let src = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd, eventMask: [.write, .delete, .rename, .extend], queue: .main)
-        src.setEventHandler { [weak self] in
+        let timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.reloadFromDisk() }
         }
-        src.setCancelHandler { close(fd) }
-        src.resume()
-        configWatch = src
+        RunLoop.main.add(timer, forMode: .common)
+        configTimer = timer
     }
 
+    /// Reload from disk, republishing only when something actually changed (avoids menu churn).
     private func reloadFromDisk() {
         store.reload()
-        projects = store.projects()
-        groupedHistory = history.grouped()
+        let latest = store.projects()
+        if latest != projects { projects = latest }
+        let groups = history.grouped()
+        if groups != groupedHistory { groupedHistory = groups }
     }
 
     private func startListener() {
