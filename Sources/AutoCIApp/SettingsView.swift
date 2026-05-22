@@ -76,6 +76,13 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("App") {
+                Toggle("Start at Login", isOn: Binding(
+                    get: { controller.launchAtLogin },
+                    set: { _ in controller.toggleLaunchAtLogin() }
+                ))
+            }
+
             Section {
                 HStack {
                     Button("Save", action: save)

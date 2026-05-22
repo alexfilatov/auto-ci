@@ -9,83 +9,18 @@ struct AutoCIApp: App {
     @StateObject private var controller = AppController()
     var body: some Scene {
         MenuBarExtra {
-            (Text(controller.state.dotEmoji).font(.system(size: 8))
-             + Text("  \(controller.statusLine)").font(.headline))
-
-            if let url = controller.currentRunURL, let link = URL(string: url) {
-                Link("View workflow run ↗", destination: link)
-            }
-
-            if controller.lastError != nil {
-                Button("Show error details…") { controller.showErrorDetails() }
-            }
-
-            if !controller.setupIssues.isEmpty {
-                Divider()
-                Text("⚠ Setup required")
-                ForEach(controller.setupIssues, id: \.self) { issue in
-                    Text(issue)
-                }
-            }
-
-            Divider()
-
-            Menu("Projects") {
-                if controller.projects.isEmpty {
-                    Text("None — run `auto-ci init` in a repo").foregroundStyle(.secondary)
-                } else {
-                    ForEach(controller.projects, id: \.name) { project in
-                        Menu(project.name) {
-                            Button("Stop watching") { controller.stopWatching(project) }
-                        }
-                    }
-                }
-            }
-
-            Menu("Recent") {
-                if controller.groupedHistory.isEmpty {
-                    Text("No fixes yet").foregroundStyle(.secondary)
-                } else {
-                    ForEach(controller.groupedHistory) { group in
-                        Menu(group.project) {
-                            ForEach(group.entries) { entry in
-                                entryView(entry)
-                            }
-                        }
-                    }
-                    Divider()
-                    Button("Clear History") { controller.clearHistory() }
-                }
-            }
-
-            Divider()
-            Button(controller.launchAtLogin ? "✓ Start at Login" : "Start at Login") {
-                controller.toggleLaunchAtLogin()
-            }
-            SettingsLink { Text("Settings…") }
-            Button("About") { controller.showAbout() }
-            Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
+            PanelView(controller: controller)
         } label: {
             Image(nsImage: AutoCIIcon(color: controller.state.color)
                 .rendered(template: controller.state == .idle))
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView(controller: controller)
         }
     }
 
-    @ViewBuilder
-    private func entryView(_ entry: HistoryEntry) -> some View {
-        let mark = entry.kind == "fixed" ? "✓" : entry.kind == "deferred" ? "⏸" : "⚠"
-        let label = "\(mark) \(entry.branch) — \(entry.detail)"
-        if let urlString = entry.runURL, let link = URL(string: urlString) {
-            Link("\(label) ↗", destination: link)
-        } else {
-            Text(label)
-        }
-    }
 }
 
 /// UI presentation for the Core CIState. The glyph is identical in every state — only color changes.
