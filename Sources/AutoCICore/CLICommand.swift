@@ -58,6 +58,8 @@ public struct CLICommand: Sendable {
             return message
         case "doctor":
             return doctor()
+        case "status":
+            return status(cwd: cwd)
         case "fix":
             return try runFix(args: Array(args.dropFirst()), cwd: cwd)
         case "hold":
@@ -155,6 +157,63 @@ public struct CLICommand: Sendable {
         HistoryStore(root: root).removeProject(name)
     }
 
+    /// Status of the current repo if registered, otherwise a summary of all projects.
+    private func status(cwd: String) -> String {
+        let leases = LeaseStore(root: root)
+        let history = HistoryStore(root: root)
+        if let project = store.project(forPath: cwd) {
+            return singleStatus(project, leases: leases, history: history)
+        }
+        let all = store.projects()
+        guard !all.isEmpty else { return "No projects registered. Run `auto-ci init` in a repo." }
+        var lines = ["Not in a registered repo. \(all.count) project(s) registered:"]
+        for p in all { lines.append("  " + summaryLine(p, leases: leases, history: history)) }
+        return lines.joined(separator: "\n")
+    }
+
+    private func singleStatus(_ p: ProjectConfig, leases: LeaseStore, history: HistoryStore) -> String {
+        let hook = hookInstaller.isManaged(repoPath: p.path) ? "installed ✓" : "not installed ✗ (run `auto-ci init`)"
+        let holds = leases.active().filter { $0.project == p.name }
+        let holdsText = holds.isEmpty ? "none"
+            : holds.map { "\($0.branch) (\(minutesLeft($0.expiresAt)))" }.joined(separator: ", ")
+        let mine = history.all().filter { $0.project == p.name }
+        let recent = mine.first.map { "\(mark($0.kind)) \($0.branch) — \($0.detail) (\(ago($0.timestamp)))" } ?? "none yet"
+        return """
+        \(p.name)  (\(p.remote))
+          path:           \(p.path)
+          hook:           \(hook)
+          grace period:   \(p.graceSeconds)s
+          protected:      \(p.protectedBranches.joined(separator: ", "))
+          protect tests:  \(p.protectTests ? "on" : "off")
+          holds:          \(holdsText)
+          recent fixes:   \(mine.count) total, last: \(recent)
+        """
+    }
+
+    private func summaryLine(_ p: ProjectConfig, leases: LeaseStore, history: HistoryStore) -> String {
+        let hook = hookInstaller.isManaged(repoPath: p.path) ? "hook ✓" : "hook ✗"
+        let holds = leases.active().filter { $0.project == p.name }.count
+        let last = history.all().first { $0.project == p.name }.map { "\(mark($0.kind)) (\(ago($0.timestamp)))" } ?? "—"
+        return "\(p.name.padding(toLength: 22, withPad: " ", startingAt: 0)) \(hook)   holds: \(holds)   last: \(last)"
+    }
+
+    private func mark(_ kind: String) -> String {
+        switch kind { case "fixed": return "✓"; case "deferred": return "⏸"; default: return "⚠" }
+    }
+
+    private func minutesLeft(_ date: Date) -> String {
+        let m = max(0, Int(date.timeIntervalSinceNow / 60))
+        return "expires in \(m)m"
+    }
+
+    private func ago(_ date: Date) -> String {
+        let s = Int(Date().timeIntervalSince(date))
+        if s < 60 { return "\(s)s ago" }
+        if s < 3600 { return "\(s / 60)m ago" }
+        if s < 86400 { return "\(s / 3600)h ago" }
+        return "\(s / 86400)d ago"
+    }
+
     private func doctor() -> String {
         let statuses = DependencyChecker(runner: runner).check()
         var lines: [String] = []
@@ -184,6 +243,7 @@ public struct CLICommand: Sendable {
           init        Register the current repo and install the pre-push hook
           uninstall   Remove the hook and unregister the current repo
           list        List all registered projects
+          status      Show status of the current repo, or all repos if outside one
           fix         Run the fix pipeline once for the current commit
                         --sha <sha>        fix a specific commit instead of HEAD
                         --branch <branch>  treat the fix as targeting this branch

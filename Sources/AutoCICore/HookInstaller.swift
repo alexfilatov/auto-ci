@@ -23,6 +23,13 @@ public struct HookInstaller: Sendable {
         return (repoPath + "/.git/hooks", false)
     }
 
+    /// Whether the auto-ci managed pre-push hook is currently installed (honoring core.hooksPath).
+    public func isManaged(repoPath: String) -> Bool {
+        let (dir, _) = hooksDir(repoPath: repoPath)
+        guard let content = try? String(contentsOfFile: dir + "/pre-push", encoding: .utf8) else { return false }
+        return content.contains(marker)
+    }
+
     /// Returns human-readable notes about the install (e.g. a warning when the hooks dir is tracked).
     @discardableResult
     public func install(repoPath: String, socketPath: String, project: String) throws -> [String] {

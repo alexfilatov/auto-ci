@@ -129,6 +129,31 @@ final class CLICommandTests: XCTestCase {
         XCTAssertTrue(out.contains("release"))
     }
 
+    func testStatusForRegisteredRepoShowsDetail() throws {
+        let store = ConfigStore(root: root.appendingPathComponent("cfg"))
+        try store.upsert(ProjectConfig(name: "demo", path: root.path, remote: "git@github.com:x/y.git",
+                                       graceSeconds: 90))
+        let cli = CLICommand(store: store, runner: FakeCommandRunner(),
+                             hookInstaller: HookInstaller(runner: { let f = FakeCommandRunner(); f.stub(command: "git", args: ["-C"], stdout: ""); return f }()),
+                             socketPath: "/tmp/sock", root: root)
+        let out = try cli.run(["status"], cwd: root.path)
+        XCTAssertTrue(out.contains("demo"))
+        XCTAssertTrue(out.contains("grace period:   90s"))
+        XCTAssertTrue(out.contains("protect tests:  on"))
+    }
+
+    func testStatusOutsideRepoListsAll() throws {
+        let store = ConfigStore(root: root.appendingPathComponent("cfg"))
+        try store.upsert(ProjectConfig(name: "alpha", path: "/some/alpha", remote: "o"))
+        try store.upsert(ProjectConfig(name: "beta", path: "/some/beta", remote: "o"))
+        let cli = CLICommand(store: store, runner: FakeCommandRunner(),
+                             hookInstaller: HookInstaller(), socketPath: "/tmp/sock", root: root)
+        let out = try cli.run(["status"], cwd: "/unrelated/path")
+        XCTAssertTrue(out.contains("2 project(s) registered"))
+        XCTAssertTrue(out.contains("alpha"))
+        XCTAssertTrue(out.contains("beta"))
+    }
+
     func testListShowsProjects() throws {
         let store = ConfigStore(root: root.appendingPathComponent("cfg"))
         try store.upsert(ProjectConfig(name: "demo", path: "/x", remote: "origin"))
