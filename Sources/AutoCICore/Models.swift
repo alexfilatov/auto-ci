@@ -6,8 +6,33 @@ public struct ProjectConfig: Codable, Equatable, Sendable {
     public var path: String
     public var remote: String
     public var protectedBranches: [String]
-    public init(name: String, path: String, remote: String, protectedBranches: [String] = ["main", "master"]) {
-        self.name = name; self.path = path; self.remote = remote; self.protectedBranches = protectedBranches
+    public var protectTests: Bool
+    public var testPathPatterns: [String]
+
+    public static let defaultTestPathPatterns = ["tests/", "_test", ".test.", "spec", "/test"]
+
+    public init(name: String, path: String, remote: String,
+                protectedBranches: [String] = ["main", "master"],
+                protectTests: Bool = true,
+                testPathPatterns: [String] = ProjectConfig.defaultTestPathPatterns) {
+        self.name = name; self.path = path; self.remote = remote
+        self.protectedBranches = protectedBranches
+        self.protectTests = protectTests
+        self.testPathPatterns = testPathPatterns
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, path, remote, protectedBranches, protectTests, testPathPatterns
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.path = try c.decode(String.self, forKey: .path)
+        self.remote = try c.decode(String.self, forKey: .remote)
+        self.protectedBranches = try c.decodeIfPresent([String].self, forKey: .protectedBranches) ?? ["main", "master"]
+        self.protectTests = try c.decodeIfPresent(Bool.self, forKey: .protectTests) ?? true
+        self.testPathPatterns = try c.decodeIfPresent([String].self, forKey: .testPathPatterns) ?? ProjectConfig.defaultTestPathPatterns
     }
 }
 
@@ -80,4 +105,5 @@ public enum AppError: Error, Equatable, Sendable {
     case noChanges
     case shaGone(String)
     case timedOut
+    case testsModified([String])
 }

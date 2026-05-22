@@ -32,6 +32,10 @@ public struct GitClient: Sendable {
         try git(args, cwd: cwd)
     }
     public func diff(cwd: String) throws -> String { try git(["diff", "HEAD"], cwd: cwd) }
+    public func discardChanges(cwd: String) throws {
+        try git(["reset", "--hard", "HEAD"], cwd: cwd)
+        try git(["clean", "-fd"], cwd: cwd)
+    }
     public func hasUncommittedChanges(cwd: String) throws -> Bool {
         !(try git(["status", "--porcelain"], cwd: cwd)).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }

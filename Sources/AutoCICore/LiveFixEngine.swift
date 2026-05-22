@@ -38,7 +38,9 @@ public final class LiveFixEngine: FixEngine, @unchecked Sendable {
         let builder = ContextBuilder(github: github, git: git, memory: memory, signatures: signatures)
         let ctx = try builder.build(runId: run.id, job: run.name, step: run.name, sha: sha,
                                     clonePath: clone, workflowYAML: workflowYAML)
-        let fix = try fixRunner.run(context: ctx, clonePath: clone)
+        let fix = try fixRunner.run(context: ctx, clonePath: clone,
+                                    protectTests: config.protectTests,
+                                    testPatterns: config.testPathPatterns)
         let publishResult = try publisher.publish(branch: branch, protectedBranches: config.protectedBranches,
                                                   clonePath: clone, summary: fix.summary, runId: run.id)
         return FixAttempt(outcome: publishResult.outcome, fixSHA: publishResult.fixSHA)

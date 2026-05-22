@@ -15,6 +15,15 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(decoded, p)
     }
 
+    func testProjectConfigDecodesLegacyJSONWithoutNewFields() throws {
+        let json = """
+        {"name":"demo","path":"/tmp/demo","remote":"origin","protectedBranches":["main"]}
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(ProjectConfig.self, from: json)
+        XCTAssertTrue(decoded.protectTests)
+        XCTAssertFalse(decoded.testPathPatterns.isEmpty)
+    }
+
     func testRunStatusTerminalDetection() {
         XCTAssertTrue(RunStatus.failed.isTerminal)
         XCTAssertTrue(RunStatus.succeeded.isTerminal)

@@ -14,6 +14,30 @@ final class FixRunnerTests: XCTestCase {
         XCTAssertTrue(prompt.contains("boom"))
         XCTAssertTrue(prompt.contains("added gem"))
         XCTAssertTrue(prompt.contains("Don't touch unrelated code"))
+        XCTAssertTrue(prompt.contains("NEVER modify, weaken"))
+    }
+
+    func testRefusesFixThatModifiesTestsAfterRetry() {
+        let fake = FakeCommandRunner()
+        fake.stub(command: "claude", args: ["-p"], stdout: "edited a test")
+        fake.stub(command: "git", args: ["diff"], stdout: "diff --git a/Tests/Foo.swift b/Tests/Foo.swift\n-XCTAssertEqual(x, 2)\n+XCTAssertEqual(x, 1)")
+        let runner = FixRunner(runner: fake, git: GitClient(runner: fake))
+        let ctx = FixContext(runId: 1, job: "t", step: "s", logs: "x", workflowYAML: "y",
+                             commitDiff: "", changedFiles: [], pastFixes: [])
+        XCTAssertThrowsError(try runner.run(context: ctx, clonePath: "/clone", protectTests: true)) {
+            XCTAssertEqual($0 as? AppError, .testsModified(["Tests/Foo.swift"]))
+        }
+    }
+
+    func testAllowsTestEditsWhenProtectTestsFalse() throws {
+        let fake = FakeCommandRunner()
+        fake.stub(command: "claude", args: ["-p"], stdout: "edited a test")
+        fake.stub(command: "git", args: ["diff"], stdout: "diff --git a/Tests/Foo.swift b/Tests/Foo.swift\n+changed")
+        let runner = FixRunner(runner: fake, git: GitClient(runner: fake))
+        let ctx = FixContext(runId: 1, job: "t", step: "s", logs: "x", workflowYAML: "y",
+                             commitDiff: "", changedFiles: [], pastFixes: [])
+        let result = try runner.run(context: ctx, clonePath: "/clone", protectTests: false)
+        XCTAssertTrue(result.madeChanges)
     }
 
     func testRunInvokesClaudeAndReturnsDiff() throws {
