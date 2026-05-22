@@ -57,6 +57,7 @@ public struct ProjectOrderKey: Equatable, Sendable {
 /// Display order for the grid: attention, fixing, watching, fixed, idle;
 /// then most-recent activity first; then name ascending.
 public func orderedProjectNames(_ keys: [ProjectOrderKey]) -> [String] {
+    // Display priority (most urgent first) — intentionally distinct from CIState.severity, which is for worst-state roll-up only.
     func rank(_ s: CIState) -> Int {
         switch s {
         case .attention: return 0
@@ -80,6 +81,7 @@ public func historyMarker(forKind kind: String) -> String {
     switch kind {
     case "fixed": return "✓"
     case "deferred": return "⏸"
+    // stuck / gave-up / error all surface as the same warning glyph.
     case "stuck", "gaveUp", "error": return "⚠"
     default: return "•"
     }
