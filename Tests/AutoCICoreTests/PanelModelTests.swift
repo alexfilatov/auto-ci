@@ -33,4 +33,26 @@ final class PanelModelTests: XCTestCase {
         XCTAssertEqual(historyMarker(forKind: "error"), "⚠")
         XCTAssertEqual(historyMarker(forKind: "anything-else"), "•")
     }
+
+    func testOrderingByRankThenRecency() {
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 2_000)
+        let keys = [
+            ProjectOrderKey(name: "idleRepo",   state: .idle,      lastActivity: nil),
+            ProjectOrderKey(name: "greenOld",   state: .fixed,     lastActivity: t0),
+            ProjectOrderKey(name: "greenNew",   state: .fixed,     lastActivity: t1),
+            ProjectOrderKey(name: "watch",      state: .watching,  lastActivity: t1),
+            ProjectOrderKey(name: "fixing",     state: .fixing,    lastActivity: t1),
+            ProjectOrderKey(name: "needsYou",   state: .attention, lastActivity: t0),
+        ]
+        XCTAssertEqual(orderedProjectNames(keys),
+                       ["needsYou", "fixing", "watch", "greenNew", "greenOld", "idleRepo"])
+    }
+    func testOrderingNameTiebreak() {
+        let keys = [
+            ProjectOrderKey(name: "bravo", state: .idle, lastActivity: nil),
+            ProjectOrderKey(name: "alpha", state: .idle, lastActivity: nil),
+        ]
+        XCTAssertEqual(orderedProjectNames(keys), ["alpha", "bravo"])
+    }
 }

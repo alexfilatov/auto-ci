@@ -44,6 +44,37 @@ public struct ProjectLiveState: Equatable, Sendable {
     }
 }
 
+/// One project's sort inputs for the grid ordering.
+public struct ProjectOrderKey: Equatable, Sendable {
+    public let name: String
+    public let state: CIState
+    public let lastActivity: Date?
+    public init(name: String, state: CIState, lastActivity: Date?) {
+        self.name = name; self.state = state; self.lastActivity = lastActivity
+    }
+}
+
+/// Display order for the grid: attention, fixing, watching, fixed, idle;
+/// then most-recent activity first; then name ascending.
+public func orderedProjectNames(_ keys: [ProjectOrderKey]) -> [String] {
+    func rank(_ s: CIState) -> Int {
+        switch s {
+        case .attention: return 0
+        case .fixing: return 1
+        case .watching: return 2
+        case .fixed: return 3
+        case .idle: return 4
+        }
+    }
+    return keys.sorted { a, b in
+        if rank(a.state) != rank(b.state) { return rank(a.state) < rank(b.state) }
+        let ta = a.lastActivity ?? .distantPast
+        let tb = b.lastActivity ?? .distantPast
+        if ta != tb { return ta > tb }
+        return a.name < b.name
+    }.map { $0.name }
+}
+
 /// Maps a HistoryEntry.kind string to its one-glyph marker for the detail history list.
 public func historyMarker(forKind kind: String) -> String {
     switch kind {
