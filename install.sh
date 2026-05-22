@@ -39,6 +39,11 @@ install_prebuilt() {
     ditto -x -k "$tmp/AutoCI.app.zip" "$tmp/extracted"
     # Strip the Gatekeeper quarantine flag so the unsigned app opens cleanly.
     /usr/bin/xattr -dr com.apple.quarantine "$tmp/extracted/AutoCI.app" 2>/dev/null || true
+    # Quit any running instance BEFORE replacing the bundle — deleting a live app's
+    # bundle out from under it crashes the running process.
+    osascript -e 'tell application "AutoCI" to quit' 2>/dev/null || true
+    pkill -f "AutoCI.app/Contents/MacOS/AutoCIApp" 2>/dev/null || true
+    sleep 1
     rm -rf /Applications/AutoCI.app
     cp -R "$tmp/extracted/AutoCI.app" /Applications/AutoCI.app
     ok "AutoCI.app → /Applications"

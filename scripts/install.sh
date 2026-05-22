@@ -27,6 +27,11 @@ ok "Built the auto-ci CLI"
 ok "Built AutoCI.app"
 
 step "Installing the menubar app"
+# Quit any running instance before replacing the bundle (deleting a live app's
+# bundle out from under it crashes the running process).
+osascript -e 'tell application "AutoCI" to quit' 2>/dev/null || true
+pkill -f "AutoCI.app/Contents/MacOS/AutoCIApp" 2>/dev/null || true
+sleep 1
 rm -rf /Applications/AutoCI.app
 cp -R AutoCI.app /Applications/AutoCI.app
 ok "AutoCI.app → /Applications"
