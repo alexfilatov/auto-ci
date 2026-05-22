@@ -14,16 +14,26 @@ struct AutoCIApp: App {
                 Link("View workflow run ↗", destination: link)
             }
 
+            if !controller.setupIssues.isEmpty {
+                Divider()
+                Text("⚠ Setup required")
+                ForEach(controller.setupIssues, id: \.self) { issue in
+                    Text(issue)
+                }
+            }
+
             Divider()
 
-            if controller.recent.isEmpty {
-                Text("No activity yet").foregroundStyle(.secondary)
-            } else {
-                ForEach(controller.recent) { item in
-                    if let urlString = item.url, let link = URL(string: urlString) {
-                        Link("\(item.text) ↗", destination: link)
-                    } else {
-                        Text(item.text)
+            Menu("Recent") {
+                if controller.groupedHistory.isEmpty {
+                    Text("No fixes yet").foregroundStyle(.secondary)
+                } else {
+                    ForEach(controller.groupedHistory) { group in
+                        Menu(group.project) {
+                            ForEach(group.entries) { entry in
+                                entryView(entry)
+                            }
+                        }
                     }
                 }
             }
@@ -32,13 +42,17 @@ struct AutoCIApp: App {
             Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
         }
     }
-}
 
-/// One line in the "recent activity" list, optionally linking to a GitHub run.
-struct RecentItem: Identifiable, Equatable {
-    let id = UUID()
-    let text: String
-    let url: String?
+    @ViewBuilder
+    private func entryView(_ entry: HistoryEntry) -> some View {
+        let mark = entry.kind == "fixed" ? "✓" : "⚠"
+        let label = "\(mark) \(entry.branch) — \(entry.detail)"
+        if let urlString = entry.runURL, let link = URL(string: urlString) {
+            Link("\(label) ↗", destination: link)
+        } else {
+            Text(label)
+        }
+    }
 }
 
 @MainActor
@@ -53,15 +67,18 @@ final class AppController: ObservableObject, Notifier {
     }
 
     @Published var statusLine = "Idle — watching for pushes"
-    @Published var recent: [RecentItem] = []
+    @Published var groupedHistory: [ProjectHistory] = []
+    @Published var setupIssues: [String] = []
     @Published var iconName = Icon.idle
     @Published var currentRunURL: String?
 
     private let store = ConfigStore(root: ConfigStore.defaultRoot)
+    private let history = HistoryStore(root: ConfigStore.defaultRoot)
     private var listener: PushListener?
 
     init() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        groupedHistory = history.grouped()
         startListener()
         runDependencyPreflight()
     }
@@ -77,7 +94,7 @@ final class AppController: ObservableObject, Notifier {
             guard !problems.isEmpty else { return }
             self.iconName = Icon.attention
             self.statusLine = "Setup required"
-            self.recent = problems.map { RecentItem(text: $0.hint, url: nil) }
+            self.setupIssues = problems.map { $0.hint }
         }
     }
 
@@ -154,29 +171,36 @@ final class AppController: ObservableObject, Notifier {
 
     func notifyAsync(_ event: DaemonEvent) async {
         let (title, body): (String, String)
+        let project: String, branch: String, kind: String, detail: String
         switch event {
-        case .fixed(_, let branch, let detail):
-            (title, body) = ("CI fixed ✓", "\(branch): \(detail)")
+        case .fixed(let p, let br, let det):
+            (title, body) = ("CI fixed ✓", "\(br): \(det)")
             iconName = Icon.fixed
             statusLine = title
+            (project, branch, kind, detail) = (p, br, "fixed", det)
             // Drop back to idle shortly so the menubar reflects "watching" again.
             scheduleIdleReset()
-        case .stuck(_, let branch):
-            (title, body) = ("CI stuck — needs you", branch)
+        case .stuck(let p, let br):
+            (title, body) = ("CI stuck — needs you", br)
             iconName = Icon.attention
             statusLine = title
-        case .gaveUp(_, let branch):
-            (title, body) = ("CI fix gave up", branch)
+            (project, branch, kind, detail) = (p, br, "stuck", "stuck — needs you")
+        case .gaveUp(let p, let br):
+            (title, body) = ("CI fix gave up", br)
             iconName = Icon.attention
             statusLine = title
-        case .error(_, let message):
+            (project, branch, kind, detail) = (p, br, "gaveUp", "fix gave up")
+        case .error(let p, let message):
             (title, body) = ("Auto-CI error", message)
             iconName = Icon.attention
             statusLine = title
+            (project, branch, kind, detail) = (p, "", "error", message)
         }
 
-        recent.insert(RecentItem(text: "\(title) — \(body)", url: currentRunURL), at: 0)
-        recent = Array(recent.prefix(10))
+        let entry = HistoryEntry(project: project, branch: branch, kind: kind,
+                                 detail: detail, runURL: currentRunURL, timestamp: Date())
+        history.record(entry)
+        groupedHistory = history.grouped()
 
         let content = UNMutableNotificationContent()
         content.title = title
