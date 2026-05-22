@@ -56,7 +56,7 @@ struct AutoCIApp: App {
             }
             Button("Quit Auto-CI") { NSApplication.shared.terminate(nil) }
         } label: {
-            AutoCIIcon(color: controller.state.color)
+            Image(nsImage: AutoCIIcon(color: controller.state.color).rendered())
         }
         .menuBarExtraStyle(.menu)
     }
@@ -78,7 +78,7 @@ enum AppState: Equatable {
     case idle, watching, fixing, fixed, attention
     var color: Color {
         switch self {
-        case .idle: return .secondary
+        case .idle: return .primary
         case .watching: return .blue
         case .fixing: return .orange
         case .fixed: return .green

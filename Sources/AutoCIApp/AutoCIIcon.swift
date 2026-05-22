@@ -1,5 +1,6 @@
 // Sources/AutoCIApp/AutoCIIcon.swift
 import SwiftUI
+import AppKit
 
 /// The Auto-CI brand mark: a CI "loop" arrow (continuous integration cycling)
 /// wrapped around a central auto-fix spark/bolt. The glyph is identical in every
@@ -54,5 +55,18 @@ struct AutoCIIcon: View {
             ctx.fill(bolt, with: .color(color))
         }
         .frame(width: pointSize, height: pointSize)
+    }
+}
+
+extension AutoCIIcon {
+    /// Rasterize the glyph to an NSImage for use as a MenuBarExtra label.
+    /// SwiftUI does not reliably render arbitrary drawing views directly in the
+    /// status bar, so we render to a (non-template, so color shows) NSImage.
+    @MainActor func rendered() -> NSImage {
+        let renderer = ImageRenderer(content: self)
+        renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+        let image = renderer.nsImage ?? NSImage(size: NSSize(width: pointSize, height: pointSize))
+        image.isTemplate = false
+        return image
     }
 }
