@@ -2,6 +2,9 @@
 
 A macOS menubar app + CLI that watches GitHub Actions for your locally-pushed commits and automatically fixes failing CI using headless Claude Code — no manual intervention needed for common errors.
 
+<img width="329" height="269" alt="image" src="https://github.com/user-attachments/assets/5e120d54-9d19-4832-bf4d-ccac6fac0c14" />
+
+
 It's **local-first**: no server, no cloud, nothing public-facing. The fixing brain is `claude` running inside a per-project clone, so it inherits your project's own context (`CLAUDE.md`, config, tooling). It's **language-agnostic by construction** — there are no per-language fixers; the agent reasons about the failure like a developer would.
 
 ## What it does
